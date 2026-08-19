@@ -51,7 +51,7 @@ function sphericalSegmentPoints(vertices,pairs,steps=48){const pts=[];for(const[
 function lineSegments(pairs,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(poly.v,pairs)),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});return new THREE.LineSegments(geo,mat)}
 function sphericalPoint(a,b,c,wa,wb,wc){return normalize(a.map((x,i)=>wa*x+wb*b[i]+wc*c[i]))}
 function appendSphericalTriangle(positions,a,b,c,subdivisions=8){const point=(i,j)=>project(sphericalPoint(a,b,c,1-(i+j)/subdivisions,i/subdivisions,j/subdivisions));for(let i=0;i<subdivisions;i++)for(let j=0;j<subdivisions-i;j++){const p0=point(i,j),p1=point(i+1,j),p2=point(i,j+1);if(triangleVisible(p0,p1,p2))for(const p of[p0,p1,p2])positions.push(p.x,p.y,p.z);if(j<subdivisions-i-1){const p3=point(i+1,j+1);if(triangleVisible(p1,p3,p2))for(const p of[p1,p3,p2])positions.push(p.x,p.y,p.z)}}}
-function sphericalFaceGeometry(vertices,faces){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]])}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
+function sphericalFaceGeometry(vertices,faces,subdivisions=8){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]],subdivisions)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
 function sphericalFaces(vertices,faces,color,opacity){return new THREE.Mesh(sphericalFaceGeometry(vertices,faces),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
 
 // A decagonal great circle, its 150-cell solid torus, and the 100-face boundary.
@@ -76,8 +76,8 @@ const extremeCircle=[];
 for(let i=0;i<=180;i++){const t=i/180*Math.PI*2;extremeCircle.push(project(basisN.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisM[k])))}
 const extremeCircleLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(extremeCircle),extremeMaterial),extremeAxisMaterial=new THREE.LineBasicMaterial({color:0x8ff3d5,transparent:true,opacity:.82,depthWrite:false}),extremeAxisLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-PROJECTION_LIMIT),new THREE.Vector3(0,0,PROJECTION_LIMIT)]),extremeAxisMaterial);
 groups.extremes.add(extremeCircleLine,extremeAxisLine);
-groups.cell.add(lineSegments(poly.edges,0x9b6700,.34));
-const vertexGeo=new THREE.SphereGeometry(.035,7,7),vertexMat=new THREE.MeshBasicMaterial({color:0xb47700,transparent:true,opacity:.82});
+groups.cell.add(lineSegments(poly.edges,0x9b6700,.15));
+const vertexGeo=new THREE.SphereGeometry(.035,7,7),vertexMat=new THREE.MeshBasicMaterial({color:0xb47700,transparent:true,opacity:.42});
 for(const q of poly.v){const p=project(q);if(projectionVisible(p)){const m=new THREE.Mesh(vertexGeo,vertexMat);m.position.copy(p);groups.cell.add(m)}}
 
 // Construct the dual 120-cell from the 600 tetrahedron centers. Two dual
@@ -87,10 +87,10 @@ const dualFaceMap=new Map();
 poly.cells.forEach((c,ci)=>{for(let k=0;k<4;k++){const key=c.filter((_,j)=>j!==k).sort((x,y)=>x-y).join(',');if(!dualFaceMap.has(key))dualFaceMap.set(key,[]);dualFaceMap.get(key).push(ci)}});
 const dualEdges=[...dualFaceMap.values()].filter(x=>x.length===2).map(x=>[x[0],x[1]]);
 const cell600Faces=[...dualFaceMap.keys()].map(key=>key.split(',').map(Number));
-groups.cell.add(sphericalFaces(poly.v,cell600Faces,0xb47700,.022));
+groups.cell.add(sphericalFaces(poly.v,cell600Faces,0xb47700,.012));
 function projectedSegments(vertices,pairs,color,opacity){return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(vertices,pairs)),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}))}
-groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.34));
-const dualPointGeo=new THREE.SphereGeometry(.022,5,5),dualPointMat=new THREE.MeshBasicMaterial({color:0xb8aaff,transparent:true,opacity:.68});
+groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.14));
+const dualPointGeo=new THREE.SphereGeometry(.022,5,5),dualPointMat=new THREE.MeshBasicMaterial({color:0xb8aaff,transparent:true,opacity:.3});
 for(const q of dualVertices){const p=project(q);if(projectionVisible(p)){const m=new THREE.Mesh(dualPointGeo,dualPointMat);m.position.copy(p);groups.cell120.add(m)}}
 
 // The 60 vertices belonging to the decagonal solid torus select 60 dual
@@ -102,7 +102,7 @@ const primalEdgeCells=new Map();
 poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
 function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
 const cell120Faces=[...primalEdgeCells.values()].map(orderPentagon).filter(face=>face.length===5);
-groups.cell120.add(sphericalFaces(dualVertices,cell120Faces,0x9f8cff,.018));
+groups.cell120.add(sphericalFaces(dualVertices,cell120Faces,0x9f8cff,.01));
 const seamPairs=[];
 for(const edge of crossingEdges){const ids=primalEdgeCells.get([...edge].sort((x,y)=>x-y).join(',')),cycle=orderPentagon(ids);if(cycle.length===5)for(let i=0;i<5;i++)seamPairs.push([cycle[i],cycle[(i+1)%5]])}
 groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
@@ -214,15 +214,43 @@ function buildTorusCellGrid(){
   document.querySelector('#grid-description').textContent=`${torusGridSource==='cell120'?'120':'600'}-cell · ${used.size} patches · ${colorCount} colors`;
   document.querySelector('#intersection-count').value=used.size;
   document.querySelector('#intersection-label').textContent=torusGridSource==='cell120'?'DODECAHEDRA MEET TORUS':'TETRAHEDRA MEET TORUS';
+  return [...used];
 }
-const vertexRadials=poly.v.map(q=>dot(q,basisU)**2+dot(q,basisV)**2);
-const canonicalLevel=(5+Math.sqrt(5))/10;
-const intersectionLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6d28d9,transparent:true,opacity:.7,depthWrite:false}));
-const intersectionWalls=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshPhongMaterial({color:0x6d28d9,transparent:true,opacity:.028,side:THREE.DoubleSide,depthWrite:false,shininess:18}));
+const intersectionLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6d28d9,transparent:true,opacity:.82,depthWrite:false}));
+const intersectionWalls=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshPhongMaterial({color:0x6d28d9,transparent:true,opacity:.05,side:THREE.DoubleSide,depthWrite:false,shininess:28}));
 groups.intersections.add(intersectionWalls,intersectionLines);
-function updateIntersectedCells(){const level=Math.cos(torusEta)**2,ids=Math.abs(level-canonicalLevel)<1e-3?[...boundaryCells]:[];if(!ids.length)for(let ci=0;ci<poly.cells.length;ci++){const values=poly.cells[ci].map(id=>vertexRadials[id]);if(Math.min(...values)<=level+1e-8&&Math.max(...values)>=level-1e-8)ids.push(ci)}const pairs=[],seen=new Set(),faces=[],seenFaces=new Set();for(const ci of ids){const c=poly.cells[ci];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const a=c[i],b=c[j],key=a<b?`${a},${b}`:`${b},${a}`;if(seen.has(key))continue;seen.add(key);pairs.push([a,b])}for(let k=0;k<4;k++){const face=c.filter((_,i)=>i!==k).sort((a,b)=>a-b),key=face.join(',');if(!seenFaces.has(key)){seenFaces.add(key);faces.push(face)}}}intersectionLines.geometry.dispose();intersectionLines.geometry=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(poly.v,pairs));intersectionWalls.geometry.dispose();intersectionWalls.geometry=sphericalFaceGeometry(poly.v,faces);const count=document.querySelector('#intersection-count');if(count)count.value=ids.length}
+function updateIntersectedCells(ids){
+  const selected=new Set(ids),pairs=[],faces=[],seenPairs=new Set(),seenFaces=new Set();
+  const addPair=(a,b)=>{const key=a<b?`${a},${b}`:`${b},${a}`;if(!seenPairs.has(key)){seenPairs.add(key);pairs.push([a,b])}};
+  const addFace=face=>{const key=[...face].sort((a,b)=>a-b).join(',');if(!seenFaces.has(key)){seenFaces.add(key);faces.push(face)}};
+  let vertices,color;
+  if(visualMode==='cell600'){
+    vertices=poly.v;color=0x245bd6;
+    for(const ci of selected){
+      const cell=poly.cells[ci];
+      for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)addPair(cell[i],cell[j]);
+      for(let k=0;k<4;k++)addFace(cell.filter((_,i)=>i!==k));
+    }
+  }else{
+    vertices=dualVertices;color=0x6948cf;
+    for(const [edgeKey,incidentCells] of primalEdgeCells){
+      const [a,b]=edgeKey.split(',').map(Number);
+      if(!selected.has(a)&&!selected.has(b))continue;
+      const face=orderPentagon(incidentCells);
+      if(face.length!==5)continue;
+      addFace(face);
+      for(let i=0;i<5;i++)addPair(face[i],face[(i+1)%5]);
+    }
+  }
+  intersectionLines.material.color.setHex(color);
+  intersectionWalls.material.color.setHex(color);
+  intersectionLines.geometry.dispose();
+  intersectionLines.geometry=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(vertices,pairs,32));
+  intersectionWalls.geometry.dispose();
+  intersectionWalls.geometry=sphericalFaceGeometry(vertices,faces,6);
+}
 function updateLimitCurves(){groups.extremes.visible=true}
-function updateTorusGeometry(){if(visualMode==='hopf')buildHopfTorusGrid();else{buildTorusCellGrid();if(visualMode==='cell600')updateIntersectedCells()}updateLimitCurves()}
+function updateTorusGeometry(){if(visualMode==='hopf')buildHopfTorusGrid();else updateIntersectedCells(buildTorusCellGrid());updateLimitCurves()}
 scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new THREE.DirectionalLight(0xffffff,2.15);keyLight.position.set(4,7,5);scene.add(keyLight);
 
 const facePositions=[],faceColors=[];
@@ -237,7 +265,7 @@ groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=fals
 const modeLabel=document.querySelector('#mode-label');
 const numberEls=[...document.querySelectorAll('.numbers div')];
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
-function applyMode(mode){visualMode=mode;torusGridSource=mode;groups.cell.visible=mode==='cell600';groups.intersections.visible=mode==='cell600';groups.cell120.visible=mode==='cell120';modeLabel.textContent=mode==='hopf'?'TWO HOPF RULINGS':mode==='cell600'?'600-CELL INTERSECTION':'120-CELL INTERSECTION';const stats=mode==='hopf'?[[2,'RULINGS'],[24,'SHOWN CIRCLES'],[288,'PATCHES'],['∞','FIBERS']]:mode==='cell120'?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]});document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');updateTorusGeometry()}
+function applyMode(mode){visualMode=mode;torusGridSource=mode;groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';modeLabel.textContent=mode==='hopf'?'TWO HOPF RULINGS':mode==='cell600'?'600-CELL INTERSECTION':'120-CELL INTERSECTION';const stats=mode==='hopf'?[[2,'RULINGS'],[24,'SHOWN CIRCLES'],[288,'PATCHES'],['∞','FIBERS']]:mode==='cell120'?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]});document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');updateTorusGeometry()}
 modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)applyMode(input.value)}));
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});

@@ -348,23 +348,24 @@ groups.boundary.add(lineSegments(cellPairs,0x194fb7,.82));
 // A cell-centered atlas. The projection pole is kept antipodal to the current
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
-let walkView=false,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null;
-const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
-const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle');
+let walkView=false,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
+const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2(),pointerLast=new THREE.Vector2();
+const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');
 function nearestCenter(centers,target){let best=0,score=-Infinity;for(let i=0;i<centers.length;i++){const s=dot(centers[i],target);if(s>score){score=s;best=i}}return best}
 const initialChartCenter=overviewPole.map(x=>-x);
 walkCell600=nearestCenter(dualVertices,initialChartCenter);walkCell120=nearestCenter(poly.v,initialChartCenter);
 function disposeGroup(group){while(group.children.length){const child=group.children.pop();child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(m=>m.dispose());else child.material?.dispose()}}
 function faceNeighbor600(cellId,face){const owners=dualFaceMap.get([...face].sort((x,y)=>x-y).join(','));return owners?.find(id=>id!==cellId)}
-function walkFaces(){
-  if(visualMode==='cell120'){
-    const current=walkCell120;
-    return [...poly.adjacency[current]].map(neighbor=>({neighbor,vertices:dualVertices,face:orderPentagon(primalEdgeCells.get([current,neighbor].sort((x,y)=>x-y).join(',')))}));
-  }
-  const current=walkCell600,cell=poly.cells[current];
-  return cell.map((_,k)=>{const face=cell.filter((__,j)=>j!==k);return{neighbor:faceNeighbor600(current,face),vertices:poly.v,face}});
+const cell600Adjacency=Array.from({length:poly.cells.length},()=>new Set());for(const[a,b]of dualEdges){cell600Adjacency[a].add(b);cell600Adjacency[b].add(a)}
+function walkNeighbors(mode,id){return mode==='cell120'?[...poly.adjacency[id]]:[...cell600Adjacency[id]]}
+function walkCellFaces(mode,id){
+  if(mode==='cell120')return walkNeighbors(mode,id).map(neighbor=>({neighbor,vertices:dualVertices,face:orderPentagon(primalEdgeCells.get([id,neighbor].sort((x,y)=>x-y).join(',')))}));
+  const cell=poly.cells[id];return cell.map((_,k)=>{const face=cell.filter((__,j)=>j!==k);return{neighbor:faceNeighbor600(id,face),vertices:poly.v,face}});
 }
-function rebuildWalkCell(){
+function walkFaces(){
+  return walkCellFaces(visualMode,visualMode==='cell120'?walkCell120:walkCell600);
+}
+function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
   const faces=walkFaces(),currentId=visualMode==='cell120'?walkCell120:walkCell600,currentColor=walkCellColor(visualMode,currentId);
   const allPairs=[],seen=new Set();
@@ -379,7 +380,22 @@ function rebuildWalkCell(){
   });
   const vertices=faces[0]?.vertices||poly.v;
   const outline=projectedSegments(vertices,allPairs,currentColor,.96);outline.renderOrder=3;groups.walk.add(outline);
-  const marker=new THREE.Mesh(new THREE.SphereGeometry(.075,18,12),new THREE.MeshBasicMaterial({color:currentColor,transparent:true,opacity:.9,depthWrite:false}));marker.renderOrder=4;groups.walk.add(marker);
+  if(!includeContext)return;
+
+  // Neighbor shells remain visible through the current transparent walls.
+  // Immediate neighbors get faint surfaces; graph-distance-two cells are only
+  // edge traces, so the complex recedes without becoming an opaque thicket.
+  const immediate=walkNeighbors(visualMode,currentId),nearSet=new Set([currentId,...immediate]),faceBuckets=new Map(),seenFaces=new Set();
+  for(const cellId of immediate)for(const entry of walkCellFaces(visualMode,cellId)){
+    if(entry.neighbor===currentId)continue;
+    const key=[...entry.face].sort((a,b)=>a-b).join(',');if(seenFaces.has(key))continue;seenFaces.add(key);
+    const color=walkCellColor(visualMode,cellId);if(!faceBuckets.has(color))faceBuckets.set(color,[]);faceBuckets.get(color).push(entry.face);
+  }
+  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(sphericalFaceGeometry(vertices,shellFaces,5),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.034,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
+  const far=new Set();for(const cellId of immediate)for(const next of walkNeighbors(visualMode,cellId))if(!nearSet.has(next))far.add(next);
+  const edgeBuckets=new Map();
+  for(const cellId of far){const color=walkCellColor(visualMode,cellId);if(!edgeBuckets.has(color))edgeBuckets.set(color,{pairs:[],seen:new Set()});const bucket=edgeBuckets.get(color);for(const entry of walkCellFaces(visualMode,cellId))for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!bucket.seen.has(key)){bucket.seen.add(key);bucket.pairs.push([a,b])}}}
+  for(const[color,bucket]of edgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.09);trace.renderOrder=-1;groups.walk.add(trace)}
 }
 function rotateFromTo(v,a,b){
   const c=Math.max(-1,Math.min(1,dot(a,b)));if(c>.999999)return [...v];
@@ -387,6 +403,8 @@ function rotateFromTo(v,a,b){
   return v.map((value,i)=>value+((x*c-y*s)-x)*a[i]+((x*s+y*c)-y)*e2[i]);
 }
 function setWalkChart(center,axes){projectionPole=center.map(x=>-x);projectionAxes=axes;projectionScale=7.2}
+function updateInsideCamera(){const cp=Math.cos(insidePitch),direction=new THREE.Vector3(cp*Math.cos(insideYaw),cp*Math.sin(insideYaw),Math.sin(insidePitch));camera.position.set(0,0,0);camera.up.set(0,0,1);camera.lookAt(direction);camera.updateMatrixWorld()}
+function aimInsideAtFirstFace(){const entry=walkFaces()[0];if(!entry)return;const center=normalize([0,1,2,3].map(k=>entry.face.reduce((sum,id)=>sum+entry.vertices[id][k],0))),p=project(center),r=p.length();if(!Number.isFinite(r)||r<1e-6)return;insideYaw=Math.atan2(p.y,p.x);insidePitch=Math.asin(Math.max(-1,Math.min(1,p.z/r)));updateInsideCamera()}
 function tangentFrame(center,seeds){
   const frame=[];
   for(const seed of [...seeds,basisU,basisV,basisN,basisM]){
@@ -411,7 +429,7 @@ function enterWalkCell(neighbor){
   const endCenter=currentWalkCenter(),started=performance.now();walkAnimating=true;hoveredPortal=null;
   function frame(now){
     const raw=Math.min(1,(now-started)/520),t=raw*raw*(3-2*raw),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
-    setWalkChart(center,axes);rebuildWalkCell();
+    setWalkChart(center,axes);rebuildWalkCell(false);
     if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY)}
     if(raw<1)requestAnimationFrame(frame);else{walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}
   }
@@ -427,19 +445,22 @@ function setWalkView(active,urlAction='push'){
     const requested=Number(new URL(location.href).searchParams.get('cell'));
     if(Number.isInteger(requested)){if(visualMode==='cell120'&&requested>=0&&requested<120)walkCell120=requested;else if(visualMode!=='cell120'&&requested>=0&&requested<600)walkCell600=requested}
     const center=currentWalkCenter(),baseAxis=tangentFrame(center,overviewAxes);setWalkChart(center,baseAxis);
-    controls.minDistance=2.4;controls.maxDistance=24;camera.position.set(4.6,5.4,7.4);controls.target.set(0,0,0);rebuildChart(false);
+    controls.enabled=false;camera.near=.015;camera.fov=72;camera.updateProjectionMatrix();rebuildChart(false);aimInsideAtFirstFace();
   }else{
-    projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;controls.minDistance=4;controls.maxDistance=32;camera.position.set(7.4,8.8,13);groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();
+    controls.enabled=true;camera.near=.05;camera.fov=38;camera.updateProjectionMatrix();projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;controls.minDistance=4;controls.maxDistance=32;camera.position.set(7.4,8.8,13);controls.target.set(0,0,0);groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();
   }
+  stageHelp.textContent=active?'DRAG TO LOOK · CLICK A FACE TO CROSS':'DRAG TO ORBIT · SCROLL TO ZOOM';
   writeViewUrl(urlAction);
 }
 walkToggle.addEventListener('click',()=>setWalkView(!walkView));
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&walkView)setWalkView(false)});
-renderer.domElement.addEventListener('pointerdown',event=>pointerDown.set(event.clientX,event.clientY));
+function portalAtEvent(event){const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.intersectObjects(groups.walk.children.filter(x=>x.userData.portal))[0]?.object||null}
+renderer.domElement.addEventListener('pointerdown',event=>{pointerDown.set(event.clientX,event.clientY);pointerLast.copy(pointerDown);insidePointer=walkView;renderer.domElement.setPointerCapture(event.pointerId)});
 renderer.domElement.addEventListener('pointermove',event=>{
-  if(!walkView||walkAnimating)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(groups.walk.children.filter(x=>x.userData.portal))[0]?.object||null;if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.14;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.36;renderer.domElement.style.cursor=hoveredPortal?'pointer':'grab';
+  if(!walkView||walkAnimating)return;if(insidePointer){insideYaw-=(event.clientX-pointerLast.x)*.0045;insidePitch=Math.max(-1.48,Math.min(1.48,insidePitch+(event.clientY-pointerLast.y)*.0045));pointerLast.set(event.clientX,event.clientY);updateInsideCamera()}
+  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.14;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.36;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
 });
-renderer.domElement.addEventListener('pointerup',event=>{if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;if(hoveredPortal)enterWalkCell(hoveredPortal.userData.neighbor)});
+renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
 
 groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=false;groups.intersections.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
@@ -485,6 +506,6 @@ const morph=document.querySelector('#morph'),morphValue=document.querySelector('
 const atlas=document.querySelector('#atlas-grid');
 for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');selectMode('cell600','push')});atlas.append(el)}
 
-function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}new ResizeObserver(resize).observe(stage);resize();
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView)updateInsideCamera();else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}}new ResizeObserver(resize).observe(stage);resize();
+function animate(){requestAnimationFrame(animate);if(!walkView)controls.update();renderer.render(scene,camera)}animate();
 console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges. Torus seams: ${boundaryFaces.length} triangles / ${boundaryCells.length} tetrahedra; ${solidVertexSet.size}+${poly.v.length-solidVertexSet.size} dual cells / ${crossingEdges.length} pentagons.`);

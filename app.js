@@ -16,7 +16,7 @@ stage.append(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.enablePan=false;controls.dampingFactor=.055;controls.minDistance=4;controls.maxDistance=32;
 
-const groups={torus:new THREE.Group(),extremes:new THREE.Group(),hopf:new THREE.Group(),cell:new THREE.Group(),cell120:new THREE.Group(),boundary:new THREE.Group(),seam120:new THREE.Group()};
+const groups={torus:new THREE.Group(),extremes:new THREE.Group(),hopf:new THREE.Group(),cell:new THREE.Group(),intersections:new THREE.Group(),cell120:new THREE.Group(),boundary:new THREE.Group(),seam120:new THREE.Group()};
 Object.values(groups).forEach(g=>scene.add(g));
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const norm=a=>Math.sqrt(dot(a,a));
@@ -92,20 +92,28 @@ function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(o
 const seamPairs=[];
 for(const edge of crossingEdges){const ids=primalEdgeCells.get([...edge].sort((x,y)=>x-y).join(',')),cycle=orderPentagon(ids);if(cycle.length===5)for(let i=0;i<5;i++)seamPairs.push([cycle[i],cycle[(i+1)%5]])}
 groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
-const torusR=Math.sqrt((5+Math.sqrt(5))/10),torusr=Math.sqrt(1-torusR*torusR);
-function torusPoint(u,v){return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
+let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10));
+function torusPoint(u,v){const torusR=Math.cos(torusEta),torusr=Math.sin(torusEta);return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
 const torusMaterials=[
   new THREE.MeshPhongMaterial({color:0x3b6fd8,emissive:0x07183d,transparent:true,opacity:.07,side:THREE.DoubleSide,depthWrite:true,shininess:55}),
   new THREE.MeshPhongMaterial({color:0x315fc5,emissive:0x0a1d4c,transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:true,shininess:55})
 ];
 function torusTileGeometry(tileU,tileV){const SU=8,SV=5,positions=[],indices=[];for(let i=0;i<=SU;i++)for(let j=0;j<=SV;j++){const u=(tileU+i/SU)/10*Math.PI*2,v=(tileV+j/SV)/10*Math.PI*2,p=project(torusPoint(u,v));positions.push(p.x,p.y,p.z)}for(let i=0;i<SU;i++)for(let j=0;j<SV;j++){const k=i*(SV+1)+j,kn=(i+1)*(SV+1)+j;indices.push(k,kn,k+1,kn,kn+1,k+1)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();return geo}
-for(let i=0;i<10;i++)for(let j=0;j<10;j++)groups.torus.add(new THREE.Mesh(torusTileGeometry(i,j),torusMaterials[(i+j)%2]));
-function torusGridCurve(points,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(points),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});groups.torus.add(new THREE.Line(geo,mat))}
+const torusTiles=[];
+for(let i=0;i<10;i++)for(let j=0;j<10;j++){const mesh=new THREE.Mesh(torusTileGeometry(i,j),torusMaterials[(i+j)%2]);mesh.userData={tileU:i,tileV:j};torusTiles.push(mesh);groups.torus.add(mesh)}
+function torusGridCurve(points,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(points),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}),line=new THREE.Line(geo,mat);groups.torus.add(line);return line}
+const torusGridLines=[];
 for(let k=0;k<10;k++){
   const fixed=k/10*Math.PI*2,uCurve=[],vCurve=[];
   for(let s=0;s<=180;s++){const t=s/180*Math.PI*2;uCurve.push(project(torusPoint(t,fixed)));vCurve.push(project(torusPoint(fixed,t)))}
-  torusGridCurve(uCurve,0x123f98,.66);torusGridCurve(vCurve,0x5641b5,.54);
+  torusGridLines.push({line:torusGridCurve(uCurve,0x123f98,.66),kind:'u',fixed},{line:torusGridCurve(vCurve,0x5641b5,.54),kind:'v',fixed});
 }
+const vertexRadials=poly.v.map(q=>dot(q,basisU)**2+dot(q,basisV)**2);
+const canonicalLevel=(5+Math.sqrt(5))/10;
+const intersectionLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6d28d9,transparent:true,opacity:.7,depthWrite:false}));
+groups.intersections.add(intersectionLines);
+function updateIntersectedCells(){const level=Math.cos(torusEta)**2,ids=Math.abs(level-canonicalLevel)<1e-7?[...boundaryCells]:[];if(!ids.length)for(let ci=0;ci<poly.cells.length;ci++){const values=poly.cells[ci].map(id=>vertexRadials[id]);if(Math.min(...values)<=level+1e-8&&Math.max(...values)>=level-1e-8)ids.push(ci)}const pts=[],seen=new Set();for(const ci of ids){const c=poly.cells[ci];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const a=c[i],b=c[j],key=a<b?`${a},${b}`:`${b},${a}`;if(seen.has(key))continue;seen.add(key);const p=project(poly.v[a]),q=project(poly.v[b]);if(p.length()<42&&q.length()<42)pts.push(p,q)}}intersectionLines.geometry.dispose();intersectionLines.geometry=new THREE.BufferGeometry().setFromPoints(pts);const count=document.querySelector('#intersection-count');if(count)count.value=ids.length}
+function updateTorusGeometry(){for(const mesh of torusTiles){mesh.geometry.dispose();mesh.geometry=torusTileGeometry(mesh.userData.tileU,mesh.userData.tileV)}for(const item of torusGridLines){const pts=[];for(let s=0;s<=180;s++){const t=s/180*Math.PI*2;pts.push(project(item.kind==='u'?torusPoint(t,item.fixed):torusPoint(item.fixed,t)))}item.line.geometry.dispose();item.line.geometry=new THREE.BufferGeometry().setFromPoints(pts)}updateIntersectedCells()}
 scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new THREE.DirectionalLight(0xffffff,2.15);keyLight.position.set(4,7,5);scene.add(keyLight);
 
 const facePositions=[],faceColors=[];
@@ -120,17 +128,18 @@ function addCurve(points,color,opacity=.82){const geo=new THREE.BufferGeometry()
 const palette=[0x007c91,0x3559c7,0x7c3aed,0x008b68];
 for(let lat=0;lat<4;lat++){const eta=.18+(lat+.5)/4*1.20;for(let k=0;k<5;k++){const alpha=k/5*Math.PI*2+lat*.23,beta=-k/5*Math.PI*2*.62+lat*.71,pts=[];for(let s=0;s<=180;s++){const t=s/180*Math.PI*2,q=[Math.cos(eta)*Math.cos(alpha+t),Math.cos(eta)*Math.sin(alpha+t),Math.sin(eta)*Math.cos(beta+t),Math.sin(eta)*Math.sin(beta+t)],p=project(q);if(p.length()<42)pts.push(p)}addCurve(pts,palette[lat],.76)}}
 
-groups.extremes.visible=true;groups.hopf.visible=false;groups.cell.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
-const toggles={torus:document.querySelector('#toggle-torus'),extremes:document.querySelector('#toggle-extremes'),hopf:document.querySelector('#toggle-hopf'),cell:document.querySelector('#toggle-cell'),cell120:document.querySelector('#toggle-cell120'),boundary:document.querySelector('#toggle-boundary'),seam120:document.querySelector('#toggle-seam120')};
+groups.extremes.visible=true;groups.hopf.visible=false;groups.cell.visible=false;groups.intersections.visible=true;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
+const toggles={torus:document.querySelector('#toggle-torus'),extremes:document.querySelector('#toggle-extremes'),hopf:document.querySelector('#toggle-hopf'),cell:document.querySelector('#toggle-cell'),intersections:document.querySelector('#toggle-intersections'),cell120:document.querySelector('#toggle-cell120'),boundary:document.querySelector('#toggle-boundary'),seam120:document.querySelector('#toggle-seam120')};
 const modeLabel=document.querySelector('#mode-label');
 const numberEls=[...document.querySelectorAll('.numbers div')];
-function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.extremes.checked)active.push('CIRCLE + Z-AXIS');if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.cell120.checked)active.push('120-CELL');if(toggles.boundary.checked)active.push('100-TET SEAM');if(toggles.seam120.checked)active.push('200-PENTAGON SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked);const stats=toggles.cell120.checked&&!toggles.cell.checked?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]})}
+function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.extremes.checked)active.push('CIRCLE + Z-AXIS');if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.intersections.checked)active.push('INTERSECTED TETS');if(toggles.cell120.checked)active.push('120-CELL');if(toggles.boundary.checked)active.push('100-TET SEAM');if(toggles.seam120.checked)active.push('200-PENTAGON SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked);const stats=toggles.cell120.checked&&!toggles.cell.checked?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]})}
 Object.values(toggles).forEach(x=>x.addEventListener('change',updateLayers));
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{const value=+opacity.value/100;torusMaterials[0].opacity=value*.25;torusMaterials[1].opacity=Math.min(.9,value*1.9);opacityValue.value=`${opacity.value}%`});
+const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value');morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0;morph.addEventListener('input',()=>{torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusGeometry)});updateIntersectedCells();
 
 const atlas=document.querySelector('#atlas-grid');
 for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');if(!toggles.boundary.checked){toggles.boundary.checked=true;updateLayers()}});atlas.append(el)}
 
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}new ResizeObserver(resize).observe(stage);resize();
-let time=0;function animate(){requestAnimationFrame(animate);time+=.002;if(!controls.dragging){groups.hopf.rotation.y=time*.08;groups.cell.rotation.y=time*.025;groups.boundary.rotation.y=time*.025;groups.cell120.rotation.y=time*.025;groups.seam120.rotation.y=time*.025}controls.update();renderer.render(scene,camera)}animate();
+function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();
 console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges. Torus seams: ${boundaryFaces.length} triangles / ${boundaryCells.length} tetrahedra; ${solidVertexSet.size}+${poly.v.length-solidVertexSet.size} dual cells / ${crossingEdges.length} pentagons.`);

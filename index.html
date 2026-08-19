@@ -50,6 +50,12 @@
           <span><b>Separating torus</b><small>Clifford torus + 10 × 10 grid</small></span>
           <input id="toggle-torus" type="checkbox" checked><i></i>
         </label>
+        <div class="morph-control">
+          <label for="morph">TORUS MORPH <output id="morph-value">η 31.7°</output></label>
+          <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2">
+          <div class="morph-ends"><span>Z-AXIS</span><span>EQUATORIAL CIRCLE</span></div>
+          <small><output id="intersection-count">—</output> TETRAHEDRA HIGHLIGHTED</small>
+        </div>
         <label class="toggle-row">
           <span><b>Extremal fibers</b><small>Circle + vertical z-axis</small></span>
           <input id="toggle-extremes" type="checkbox" checked><i></i>
@@ -61,6 +67,10 @@
         <label class="toggle-row">
           <span><b>600-cell</b><small>720 projected edges</small></span>
           <input id="toggle-cell" type="checkbox"><i></i>
+        </label>
+        <label class="toggle-row intersect-accent">
+          <span><b>Intersected cells</b><small>100-cell seam + live level cuts</small></span>
+          <input id="toggle-intersections" type="checkbox" checked><i></i>
         </label>
         <label class="toggle-row">
           <span><b>120-cell</b><small>600 vertices · 1,200 edges</small></span>
@@ -117,6 +127,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=centered-drawer"></script>
+  <script type="module" src="./app.js?v=morphing-torus"></script>
 </body>
 </html>

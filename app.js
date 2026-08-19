@@ -320,14 +320,26 @@ groups.boundary.add(lineSegments(cellPairs,0x194fb7,.82));
 groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=false;groups.intersections.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
-function applyMode(mode){visualMode=mode;torusGridSource=mode;groups.hopf.visible=mode==='hopf';groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=mode==='hopf'?'HOPF FIBRATION':`${label} INTERSECTION`;document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');updateTorusGeometry()}
-modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)applyMode(input.value)}));
+const publicModeNames={hopf:'hopf',cell600:'600-cell',cell120:'120-cell'};
+const internalModeNames={hopf:'hopf','600-cell':'cell600','120-cell':'cell120'};
+function modeFromUrl(){return internalModeNames[new URL(location.href).searchParams.get('mode')]||'hopf'}
+function writeModeUrl(mode,action){
+  if(!action)return;
+  const url=new URL(location.href),publicName=publicModeNames[mode];
+  if(action==='push'&&url.searchParams.get('mode')===publicName)return;
+  url.searchParams.set('mode',publicName);
+  history[`${action}State`](null,'',url);
+}
+function applyMode(mode,urlAction){visualMode=mode;torusGridSource=mode;groups.hopf.visible=mode==='hopf';groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=mode==='hopf'?'HOPF FIBRATION':`${label} INTERSECTION`;document.title=`${label} — The 3-sphere, opened up`;document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');writeModeUrl(mode,urlAction);updateTorusGeometry()}
+function selectMode(mode,urlAction){const input=modeInputs.find(candidate=>candidate.value===mode);if(input)input.checked=true;applyMode(mode,urlAction)}
+modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)applyMode(input.value,'push')}));
+window.addEventListener('popstate',()=>selectMode(modeFromUrl()));
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});
-const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value');morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0;morph.addEventListener('input',()=>{torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusGeometry)});applyMode('hopf');
+const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value');morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0;morph.addEventListener('input',()=>{torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusGeometry)});selectMode(modeFromUrl(),'replace');
 
 const atlas=document.querySelector('#atlas-grid');
-for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');const input600=document.querySelector('input[value="cell600"]');input600.checked=true;applyMode('cell600')});atlas.append(el)}
+for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');selectMode('cell600','push')});atlas.append(el)}
 
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}new ResizeObserver(resize).observe(stage);resize();
 function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();

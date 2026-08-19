@@ -52,7 +52,7 @@ function lineSegments(pairs,color,opacity){const geo=new THREE.BufferGeometry().
 function sphericalPoint(a,b,c,wa,wb,wc){return normalize(a.map((x,i)=>wa*x+wb*b[i]+wc*c[i]))}
 function appendSphericalTriangle(positions,a,b,c,subdivisions=8){const point=(i,j)=>project(sphericalPoint(a,b,c,1-(i+j)/subdivisions,i/subdivisions,j/subdivisions));for(let i=0;i<subdivisions;i++)for(let j=0;j<subdivisions-i;j++){const p0=point(i,j),p1=point(i+1,j),p2=point(i,j+1);if(triangleVisible(p0,p1,p2))for(const p of[p0,p1,p2])positions.push(p.x,p.y,p.z);if(j<subdivisions-i-1){const p3=point(i+1,j+1);if(triangleVisible(p1,p3,p2))for(const p of[p1,p3,p2])positions.push(p.x,p.y,p.z)}}}
 function sphericalFaceGeometry(vertices,faces,subdivisions=8){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]],subdivisions)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
-function sphericalFaces(vertices,faces,color,opacity){return new THREE.Mesh(sphericalFaceGeometry(vertices,faces),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
+function sphericalFaces(vertices,faces,color,opacity,subdivisions=8){return new THREE.Mesh(sphericalFaceGeometry(vertices,faces,subdivisions),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
 
 // A decagonal great circle, its 150-cell solid torus, and the 100-face boundary.
 const a=0,b=[...poly.adjacency[a]][0],basisU=poly.v[a];
@@ -87,7 +87,7 @@ const dualFaceMap=new Map();
 poly.cells.forEach((c,ci)=>{for(let k=0;k<4;k++){const key=c.filter((_,j)=>j!==k).sort((x,y)=>x-y).join(',');if(!dualFaceMap.has(key))dualFaceMap.set(key,[]);dualFaceMap.get(key).push(ci)}});
 const dualEdges=[...dualFaceMap.values()].filter(x=>x.length===2).map(x=>[x[0],x[1]]);
 const cell600Faces=[...dualFaceMap.keys()].map(key=>key.split(',').map(Number));
-groups.cell.add(sphericalFaces(poly.v,cell600Faces,0xb47700,.012));
+groups.cell.add(sphericalFaces(poly.v,cell600Faces,0xb47700,.008,4));
 function projectedSegments(vertices,pairs,color,opacity){return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(vertices,pairs)),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}))}
 groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.14));
 const dualPointGeo=new THREE.SphereGeometry(.022,5,5),dualPointMat=new THREE.MeshBasicMaterial({color:0xb8aaff,transparent:true,opacity:.3});
@@ -102,7 +102,7 @@ const primalEdgeCells=new Map();
 poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
 function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
 const cell120Faces=[...primalEdgeCells.values()].map(orderPentagon).filter(face=>face.length===5);
-groups.cell120.add(sphericalFaces(dualVertices,cell120Faces,0x9f8cff,.01));
+groups.cell120.add(sphericalFaces(dualVertices,cell120Faces,0x9f8cff,.007,4));
 const seamPairs=[];
 for(const edge of crossingEdges){const ids=primalEdgeCells.get([...edge].sort((x,y)=>x-y).join(',')),cycle=orderPentagon(ids);if(cycle.length===5)for(let i=0;i<5;i++)seamPairs.push([cycle[i],cycle[(i+1)%5]])}
 groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
@@ -110,6 +110,9 @@ let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10));
 function torusPoint(u,v){const torusR=Math.cos(torusEta),torusr=Math.sin(torusEta);return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
 function colorGraph(count,edges){const neighbors=Array.from({length:count},()=>new Set());for(const[a,b]of edges){neighbors[a].add(b);neighbors[b].add(a)}const colors=Array(count).fill(-1);for(let done=0;done<count;done++){let pick=-1,bestSat=-1,bestDegree=-1;for(let i=0;i<count;i++)if(colors[i]<0){const sat=new Set([...neighbors[i]].map(n=>colors[n]).filter(c=>c>=0)).size,degree=neighbors[i].size;if(sat>bestSat||sat===bestSat&&degree>bestDegree){pick=i;bestSat=sat;bestDegree=degree}}const used=new Set([...neighbors[pick]].map(n=>colors[n]).filter(c=>c>=0));let color=0;while(used.has(color))color++;colors[pick]=color}return colors}
 const torusPalettes={cell600:[0x245bd6,0x6c50d6,0x2183c4,0x8975e6,0x3a6aad,0x7653aa],cell120:[0x6948cf,0x2b78cf,0x3c9bb7,0x8b66da,0x4966b7,0x7453a8],hopf:[0x245bd6,0x7255d9]};
+const torusColorings={cell600:colorGraph(dualVertices.length,dualEdges),cell120:colorGraph(poly.v.length,poly.edges)};
+function centerCoordinates(centers){const data=new Float64Array(centers.length*4);for(let i=0;i<centers.length;i++){data[i*4]=dot(centers[i],basisU);data[i*4+1]=dot(centers[i],basisV);data[i*4+2]=dot(centers[i],basisN);data[i*4+3]=dot(centers[i],basisM)}return data}
+const torusCenterData={cell600:centerCoordinates(dualVertices),cell120:centerCoordinates(poly.v)};
 let visualMode='hopf',torusGridSource='hopf';
 const torusMaterial=new THREE.MeshPhongMaterial({vertexColors:true,transparent:true,opacity:.26,side:THREE.DoubleSide,depthWrite:false,shininess:55});
 const torusSurface=new THREE.Mesh(new THREE.BufferGeometry(),torusMaterial);
@@ -117,10 +120,10 @@ const torusCellLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE
 const torusRulingA=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x007c91,transparent:true,opacity:.86,depthWrite:false}));
 const torusRulingB=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6846c7,transparent:true,opacity:.8,depthWrite:false}));
 groups.torus.add(torusSurface,torusCellLines,torusRulingA,torusRulingB);
-function torusCellAt(q){const centers=torusGridSource==='cell120'?poly.v:dualVertices;let best=0,bestDot=-Infinity;for(let i=0;i<centers.length;i++){const c=centers[i],score=q[0]*c[0]+q[1]*c[1]+q[2]*c[2]+q[3]*c[3];if(score>bestDot){bestDot=score;best=i}}return best}
+function torusCellAtUV(u,v){const data=torusCenterData[torusGridSource],R=Math.cos(torusEta),r=Math.sin(torusEta),q0=R*Math.cos(u),q1=R*Math.sin(u),q2=r*Math.cos(v),q3=r*Math.sin(v);let best=0,bestDot=-Infinity;for(let i=0;i<data.length;i+=4){const score=q0*data[i]+q1*data[i+1]+q2*data[i+2]+q3*data[i+3];if(score>bestDot){bestDot=score;best=i/4}}return best}
 function setTorusSurface(positions,colors,linePts){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();torusSurface.geometry.dispose();torusSurface.geometry=geo;torusCellLines.geometry.dispose();torusCellLines.geometry=new THREE.BufferGeometry().setFromPoints(linePts)}
 function buildHopfTorusGrid(){
-  const N=12,SUBDIVISIONS=6,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],palette=torusPalettes.hopf;
+  const N=12,SUBDIVISIONS=12,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],palette=torusPalettes.hopf;
   const point=(a,b)=>torusPoint((b-a)/2,(a+b)/2);
   const addTriangle=(qs,colorIndex)=>{
     if(colorIndex===0)return;
@@ -160,39 +163,16 @@ function buildHopfTorusGrid(){
   document.querySelector('#intersection-label').textContent='CIRCLES IN TWO RULINGS';
 }
 function buildTorusCellGrid(){
-  const NU=180,NV=120,du=Math.PI*2/NU,dv=Math.PI*2/NV;
+  const NU=180,NV=120,REFINE_DEPTH=2,du=Math.PI*2/NU,dv=Math.PI*2/NV;
   const centers=torusGridSource==='cell120'?poly.v:dualVertices;
-  const centerCount=centers.length,palette=torusPalettes[torusGridSource];
-  const labels=Array.from({length:NU+1},()=>new Int32Array(NV+1));
-  const positions=[],colors=[],linePts=[],used=new Set(),adjacency=[],seenAdjacency=new Set();
-
-  for(let i=0;i<=NU;i++)for(let j=0;j<=NV;j++){
-    const id=torusCellAt(torusPoint(i*du,j*dv));
-    labels[i][j]=id;
-    used.add(id);
-  }
-
-  const triangles=[];
-  const registerTriangle=vs=>{
-    triangles.push(vs);
-    const ids=[...new Set(vs.map(v=>v.id))];
-    for(let a=0;a<ids.length;a++)for(let b=a+1;b<ids.length;b++){
-      const lo=Math.min(ids[a],ids[b]),hi=Math.max(ids[a],ids[b]),key=`${lo},${hi}`;
-      if(!seenAdjacency.has(key)){seenAdjacency.add(key);adjacency.push([lo,hi])}
-    }
+  const palette=torusPalettes[torusGridSource],coloring=torusColorings[torusGridSource];
+  const positions=[],colors=[],linePts=[],used=new Set(),vertexCache=new Map();
+  const vertexAt=(u,v)=>{
+    const key=`${u.toFixed(10)},${v.toFixed(10)}`;
+    let vertex=vertexCache.get(key);
+    if(!vertex){const id=torusCellAtUV(u,v);vertex={u,v,q:torusPoint(u,v),id};vertexCache.set(key,vertex);used.add(id)}
+    return vertex;
   };
-  for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){
-    const u=i*du,v=j*dv;
-    const a={u,v,q:torusPoint(u,v),id:labels[i][j]};
-    const b={u:u+du,v,q:torusPoint(u+du,v),id:labels[i+1][j]};
-    const c={u,v:v+dv,q:torusPoint(u,v+dv),id:labels[i][j+1]};
-    const d={u:u+du,v:v+dv,q:torusPoint(u+du,v+dv),id:labels[i+1][j+1]};
-    registerTriangle([a,b,c]);
-    registerTriangle([b,d,c]);
-  }
-
-  const coloring=colorGraph(centerCount,adjacency);
-  const colorCount=Math.max(...[...used].map(id=>coloring[id]))+1;
   const addTriangle=(qs,id)=>{
     if(torusGridSource==='cell600'&&(coloring[id]&1)===0)return;
     const ps=qs.map(project);
@@ -215,9 +195,19 @@ function buildTorusCellGrid(){
     return torusPoint(a.u+(b.u-a.u)*t,a.v+(b.v-a.v)*t);
   };
 
-  for(const vs of triangles){
+  const renderTriangle=(vs,depth=0)=>{
     const ids=[...new Set(vs.map(v=>v.id))];
-    if(ids.length===1){addTriangle(vs.map(v=>v.q),ids[0]);continue}
+    if(ids.length===1){addTriangle(vs.map(v=>v.q),ids[0]);return}
+    if(depth<REFINE_DEPTH){
+      const ab=vertexAt((vs[0].u+vs[1].u)/2,(vs[0].v+vs[1].v)/2);
+      const bc=vertexAt((vs[1].u+vs[2].u)/2,(vs[1].v+vs[2].v)/2);
+      const ca=vertexAt((vs[2].u+vs[0].u)/2,(vs[2].v+vs[0].v)/2);
+      renderTriangle([vs[0],ab,ca],depth+1);
+      renderTriangle([ab,vs[1],bc],depth+1);
+      renderTriangle([ca,bc,vs[2]],depth+1);
+      renderTriangle([ab,bc,ca],depth+1);
+      return;
+    }
     const edgeCrossings=new Array(3);
     for(let e=0;e<3;e++){
       const a=vs[e],b=vs[(e+1)%3];
@@ -247,7 +237,14 @@ function buildTorusCellGrid(){
       const jp=project(junction);
       for(const q of edgeCrossings){const p=project(q);if(segmentVisible(p,jp))linePts.push(p,jp)}
     }
+  };
+  for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){
+    const u=i*du,v=j*dv;
+    const a=vertexAt(u,v),b=vertexAt(u+du,v),c=vertexAt(u,v+dv),d=vertexAt(u+du,v+dv);
+    renderTriangle([a,b,c]);
+    renderTriangle([b,d,c]);
   }
+  const colorCount=Math.max(...[...used].map(id=>coloring[id]))+1;
   setTorusSurface(positions,colors,linePts);
   for(const ruling of[torusRulingA,torusRulingB]){ruling.geometry.dispose();ruling.geometry=new THREE.BufferGeometry()}
   document.querySelector('#grid-description').textContent=`${torusGridSource==='cell120'?'120':'600'}-cell · ${used.size} patches · ${colorCount} colors`;
@@ -256,7 +253,7 @@ function buildTorusCellGrid(){
   return [...used];
 }
 const intersectionLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6d28d9,transparent:true,opacity:.82,depthWrite:false}));
-const intersectionWalls=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshPhongMaterial({color:0x6d28d9,transparent:true,opacity:.05,side:THREE.DoubleSide,depthWrite:false,shininess:28}));
+const intersectionWalls=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshPhongMaterial({color:0x6d28d9,transparent:true,opacity:.025,side:THREE.DoubleSide,depthWrite:false,shininess:28}));
 groups.intersections.add(intersectionWalls,intersectionLines);
 function updateIntersectedCells(ids){
   const selected=new Set(ids),pairs=[],faces=[],seenPairs=new Set(),seenFaces=new Set();
@@ -286,7 +283,7 @@ function updateIntersectedCells(ids){
   intersectionLines.geometry.dispose();
   intersectionLines.geometry=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(vertices,pairs,32));
   intersectionWalls.geometry.dispose();
-  intersectionWalls.geometry=sphericalFaceGeometry(vertices,faces,6);
+  intersectionWalls.geometry=sphericalFaceGeometry(vertices,faces,4);
 }
 function updateLimitCurves(){groups.extremes.visible=true}
 function updateTorusGeometry(){if(visualMode==='hopf')buildHopfTorusGrid();else updateIntersectedCells(buildTorusCellGrid());updateLimitCurves()}

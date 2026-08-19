@@ -36,54 +36,27 @@
         </div>
         <div class="stage-help">DRAG TO ORBIT · SCROLL TO ZOOM</div>
         <div class="legend" aria-hidden="true">
-          <span><i class="torus-dot"></i>TORUS</span>
-          <span><i class="extreme-dot"></i>EXTREMES</span>
-          <span><i class="fiber-dot"></i>HOPF FIBER</span>
+          <span><i class="fiber-dot"></i>HOPF</span>
           <span><i class="cell-dot"></i>600-CELL</span>
           <span><i class="dual-dot"></i>120-CELL</span>
         </div>
       </div>
 
       <aside class="controls" aria-label="Visualization layers" tabindex="0">
-        <p class="panel-kicker">LAYERS</p>
-        <label class="toggle-row">
-          <span><b>Separating torus</b><small id="grid-description">600-cell intersection grid</small></span>
-          <input id="toggle-torus" type="checkbox" checked><i></i>
-        </label>
+        <button class="sidebar-trigger" id="sidebar-trigger" type="button" aria-expanded="false"><span>EXPLORE S³</span><b>›</b></button>
+        <p class="panel-kicker">THREE VIEWS</p>
+        <div class="mode-picker" role="radiogroup" aria-label="Structure dividing the torus">
+          <label class="mode-row"><input type="radio" name="view-mode" value="hopf" checked><i>01</i><span><b>Hopf fibrations</b><small>Two circle rulings on the torus</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="cell600"><i>02</i><span><b>600-cell</b><small>Tetrahedral cell intersections</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>03</i><span><b>120-cell</b><small>Dodecahedral cell intersections</small></span></label>
+        </div>
+        <p class="grid-description" id="grid-description">Hopf rulings · 12 + 12 circles</p>
         <div class="morph-control">
           <label for="morph">TORUS MORPH <output id="morph-value">η 31.7°</output></label>
           <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2">
           <div class="morph-ends"><span>Z-AXIS</span><span>EQUATORIAL CIRCLE</span></div>
-          <small><output id="intersection-count">—</output> TETRAHEDRA HIGHLIGHTED</small>
+          <small><output id="intersection-count">24</output> <span id="intersection-label">CIRCLES IN TWO RULINGS</span></small>
         </div>
-        <label class="toggle-row">
-          <span><b>Extremal fibers</b><small>Circle + vertical z-axis</small></span>
-          <input id="toggle-extremes" type="checkbox" checked><i></i>
-        </label>
-        <label class="toggle-row">
-          <span><b>Hopf fibration</b><small>Linked circle fibers</small></span>
-          <input id="toggle-hopf" type="checkbox"><i></i>
-        </label>
-        <label class="toggle-row">
-          <span><b>600-cell</b><small>Curved edges + transparent walls</small></span>
-          <input id="toggle-cell" type="checkbox"><i></i>
-        </label>
-        <label class="toggle-row intersect-accent">
-          <span><b>Intersected cells</b><small>100-cell seam + live level cuts</small></span>
-          <input id="toggle-intersections" type="checkbox" checked><i></i>
-        </label>
-        <label class="toggle-row">
-          <span><b>120-cell</b><small>Curved edges + transparent walls</small></span>
-          <input id="toggle-cell120" type="checkbox"><i></i>
-        </label>
-        <label class="toggle-row accent">
-          <span><b>100 boundary cells</b><small>The canonical 10 × 10 atlas</small></span>
-          <input id="toggle-boundary" type="checkbox"><i></i>
-        </label>
-        <label class="toggle-row dual-accent">
-          <span><b>120-cell seam</b><small>200 pentagonal faces</small></span>
-          <input id="toggle-seam120" type="checkbox"><i></i>
-        </label>
         <div class="control-foot">
           <label for="opacity">TORUS OPACITY <output id="opacity-value">26%</output></label>
           <input id="opacity" type="range" min="5" max="65" value="26">
@@ -119,7 +92,7 @@
 
     <section class="steps">
       <article><span>01</span><h3>Stereographic projection</h3><p>A point <i>(x, y, z, w)</i> on S³ maps to <i>(x, y, z)/(1 − w)</i>. One pole escapes to infinity; circles remain circles or become lines.</p></article>
-      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. At the two extremes of the torus family, one remains a circle while the fiber through the projection pole opens into the z-axis.</p></article>
+      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. The two torus rulings shown above come from the standard and oppositely oriented Hopf fibrations. At the extremes, a circle through the projection pole opens into the z-axis.</p></article>
       <article><span>03</span><h3>The 600-cell</h3><p>Its tetrahedra are regular in ℝ⁴. Projection preserves incidence and angles locally, but not lengths, so they stretch dramatically in ℝ³.</p></article>
     </section>
 
@@ -128,6 +101,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=cell-derived-grid"></script>
+  <script type="module" src="./app.js?v=three-structure-modes"></script>
 </body>
 </html>

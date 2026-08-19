@@ -153,6 +153,12 @@ rebuildAmbientHopf();
 function colorGraph(count,edges){const neighbors=Array.from({length:count},()=>new Set());for(const[a,b]of edges){neighbors[a].add(b);neighbors[b].add(a)}const colors=Array(count).fill(-1);for(let done=0;done<count;done++){let pick=-1,bestSat=-1,bestDegree=-1;for(let i=0;i<count;i++)if(colors[i]<0){const sat=new Set([...neighbors[i]].map(n=>colors[n]).filter(c=>c>=0)).size,degree=neighbors[i].size;if(sat>bestSat||sat===bestSat&&degree>bestDegree){pick=i;bestSat=sat;bestDegree=degree}}const used=new Set([...neighbors[pick]].map(n=>colors[n]).filter(c=>c>=0));let color=0;while(used.has(color))color++;colors[pick]=color}return colors}
 const torusPalettes={cell600:[0x245bd6,0x6c50d6,0x2183c4,0x8975e6,0x3a6aad,0x7653aa],cell120:[0x6948cf,0x2b78cf,0x3c9bb7,0x8b66da,0x4966b7,0x7453a8],hopf:[0x245bd6,0x7255d9]};
 const torusColorings={cell600:colorGraph(dualVertices.length,dualEdges),cell120:colorGraph(poly.v.length,poly.edges)};
+const walkPalettes={cell600:[0x245bd6,0x00a0a8,0x7656d4],cell120:[0x245bd6,0x00a0a8,0x7656d4,0x16976f,0xb04fbf]};
+function walkCellColor(mode,id){
+  const source=mode==='cell120'?'cell120':'cell600',colorIndex=torusColorings[source][id],palette=walkPalettes[source];
+  if(colorIndex<palette.length)return palette[colorIndex];
+  return new THREE.Color().setHSL((colorIndex*.61803398875)%1,.68,.48).getHex();
+}
 function centerCoordinates(centers){const data=new Float64Array(centers.length*4);for(let i=0;i<centers.length;i++){data[i*4]=dot(centers[i],basisU);data[i*4+1]=dot(centers[i],basisV);data[i*4+2]=dot(centers[i],basisN);data[i*4+3]=dot(centers[i],basisM)}return data}
 const torusCenterData={cell600:centerCoordinates(dualVertices),cell120:centerCoordinates(poly.v)};
 let visualMode='hopf',torusGridSource='hopf';
@@ -360,15 +366,20 @@ function walkFaces(){
 }
 function rebuildWalkCell(){
   disposeGroup(groups.walk);
-  const faces=walkFaces(),edgeColor=visualMode==='cell120'?0x5f43c2:0x194fb7,fillColor=visualMode==='hopf'?0x2a8fa1:visualMode==='cell120'?0x7656d4:0x245bd6;
+  const faces=walkFaces(),currentId=visualMode==='cell120'?walkCell120:walkCell600,currentColor=walkCellColor(visualMode,currentId);
   const allPairs=[],seen=new Set();
   faces.forEach((entry,index)=>{
-    const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],10),new THREE.MeshPhongMaterial({color:fillColor,transparent:true,opacity:.095,side:THREE.DoubleSide,depthWrite:false,shininess:35}));
+    // The face is one geometric sheet. Its tint previews the cell reached by
+    // crossing it; after crossing, the reverse portal is tinted with the old
+    // cell's stable graph color. This avoids doubled coplanar transparent walls.
+    const destinationColor=walkCellColor(visualMode,entry.neighbor);
+    const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],10),new THREE.MeshPhongMaterial({color:destinationColor,transparent:true,opacity:.14,side:THREE.DoubleSide,depthWrite:false,shininess:35}));
     mesh.userData={portal:true,neighbor:entry.neighbor,face:index};mesh.renderOrder=2;groups.walk.add(mesh);
     for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!seen.has(key)){seen.add(key);allPairs.push([a,b])}}
   });
   const vertices=faces[0]?.vertices||poly.v;
-  const outline=projectedSegments(vertices,allPairs,edgeColor,.92);outline.renderOrder=3;groups.walk.add(outline);
+  const outline=projectedSegments(vertices,allPairs,currentColor,.96);outline.renderOrder=3;groups.walk.add(outline);
+  const marker=new THREE.Mesh(new THREE.SphereGeometry(.075,18,12),new THREE.MeshBasicMaterial({color:currentColor,transparent:true,opacity:.9,depthWrite:false}));marker.renderOrder=4;groups.walk.add(marker);
 }
 function rotateFromTo(v,a,b){
   const c=Math.max(-1,Math.min(1,dot(a,b)));if(c>.999999)return [...v];
@@ -426,7 +437,7 @@ walkToggle.addEventListener('click',()=>setWalkView(!walkView));
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&walkView)setWalkView(false)});
 renderer.domElement.addEventListener('pointerdown',event=>pointerDown.set(event.clientX,event.clientY));
 renderer.domElement.addEventListener('pointermove',event=>{
-  if(!walkView||walkAnimating)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(groups.walk.children.filter(x=>x.userData.portal))[0]?.object||null;if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.095;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.28;renderer.domElement.style.cursor=hoveredPortal?'pointer':'grab';
+  if(!walkView||walkAnimating)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(groups.walk.children.filter(x=>x.userData.portal))[0]?.object||null;if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.14;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.36;renderer.domElement.style.cursor=hoveredPortal?'pointer':'grab';
 });
 renderer.domElement.addEventListener('pointerup',event=>{if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;if(hoveredPortal)enterWalkCell(hoveredPortal.userData.neighbor)});
 

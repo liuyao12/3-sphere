@@ -51,17 +51,18 @@
           <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>03</i><span><b>120-cell</b><small>Dodecahedral cell intersections</small></span></label>
         </div>
         <p class="grid-description" id="grid-description">Hopf rulings · 12 + 12 circles</p>
-        <div class="morph-control">
-          <label for="morph">TORUS MORPH <output id="morph-value">η 31.7°</output></label>
-          <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2">
-          <div class="morph-ends"><span>Z-AXIS</span><span>EQUATORIAL CIRCLE</span></div>
-          <small><output id="intersection-count">24</output> <span id="intersection-label">CIRCLES IN TWO RULINGS</span></small>
-        </div>
         <div class="control-foot">
           <label for="opacity">TORUS OPACITY <output id="opacity-value">26%</output></label>
           <input id="opacity" type="range" min="5" max="65" value="26">
         </div>
       </aside>
+      <div class="morph-dock" aria-label="Torus morph control">
+        <div class="morph-heading"><span>TORUS MORPH</span><output id="morph-value">η 31.7°</output></div>
+        <span class="morph-end morph-end-top">EQUATORIAL<br>CIRCLE</span>
+        <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2" aria-label="Morph torus from z-axis to equatorial circle">
+        <span class="morph-end morph-end-bottom">Z-AXIS</span>
+        <small><output id="intersection-count">24</output><span id="intersection-label">CIRCLES IN TWO RULINGS</span></small>
+      </div>
     </section>
 
     <section class="numbers" aria-label="600-cell counts">
@@ -101,6 +102,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=three-structure-modes"></script>
+  <script type="module" src="./app.js?v=vertical-morph-control"></script>
 </body>
 </html>

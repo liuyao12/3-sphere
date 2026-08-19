@@ -47,7 +47,7 @@
       <aside class="controls" aria-label="Visualization layers" tabindex="0">
         <p class="panel-kicker">LAYERS</p>
         <label class="toggle-row">
-          <span><b>Separating torus</b><small>Clifford torus + 10 × 10 grid</small></span>
+          <span><b>Separating torus</b><small id="grid-description">600-cell intersection grid</small></span>
           <input id="toggle-torus" type="checkbox" checked><i></i>
         </label>
         <div class="morph-control">
@@ -77,7 +77,7 @@
           <input id="toggle-cell120" type="checkbox"><i></i>
         </label>
         <label class="toggle-row accent">
-          <span><b>100 boundary cells</b><small>The toroidal 10 × 10 atlas</small></span>
+          <span><b>100 boundary cells</b><small>The canonical 10 × 10 atlas</small></span>
           <input id="toggle-boundary" type="checkbox"><i></i>
         </label>
         <label class="toggle-row dual-accent">
@@ -104,6 +104,7 @@
         <h2>Why exactly <em>100?</em></h2>
         <p>Start with one regular decagon running along a great circle of the 600-cell. The tetrahedra touching its ten vertices form a solid torus of <strong>150 cells</strong>. Its boundary is a torus tiled by <strong>100 triangles</strong>—each triangle belongs to one of <strong>100 boundary tetrahedra</strong>.</p>
         <p>This is the clean version of the claim: the torus is the boundary between two regions, not a generic smooth slice through only 100 tetrahedra. The smooth surface shown above passes through the same 50 boundary vertices; the faceted layer shows the actual 600-cell seam.</p>
+        <p>The live torus is colored by the polytope cell containing each point. Its patch count therefore changes as the torus moves. Adjacent patches receive different shades; odd adjacency cycles sometimes require more than two colors, so a literal two-color checkerboard is not always possible.</p>
         <p><strong>For the dual 120-cell, the count changes.</strong> The decomposition becomes two linked solid tori of <strong>60 dodecahedra</strong> each. Their common boundary is a bumpy torus made from <strong>200 regular pentagons</strong>. Turn on “120-cell seam” to see those pentagonal cycles projected into ℝ³.</p>
       </div>
       <div class="atlas-card" id="atlas-card">
@@ -127,6 +128,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=spherical-cells"></script>
+  <script type="module" src="./app.js?v=cell-derived-grid"></script>
 </body>
 </html>

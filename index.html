@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=cell-walk">
+  <link rel="stylesheet" href="./style.css?v=inside-outside">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -43,8 +43,8 @@
           <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>03</i><span><b>120-cell</b><small>Dodecahedral cell intersections</small></span></label>
         </div>
         <p class="grid-description" id="grid-description">Hopf rulings · 12 + 12 circles</p>
-        <button class="walk-toggle" id="walk-toggle" type="button">ENTER A CELL</button>
-        <p class="walk-note" id="walk-note">Center the chart on one chamber; click a face to cross it.</p>
+        <button class="walk-toggle" id="walk-toggle" type="button">INSIDE VIEW</button>
+        <p class="walk-note" id="walk-note">Both views are stereographic projections. Inside view centers the chart on one chamber.</p>
         <div class="control-foot">
           <label for="opacity">TORUS OPACITY <output id="opacity-value">26%</output></label>
           <input id="opacity" type="range" min="5" max="65" value="26">
@@ -99,6 +99,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=cell-walk"></script>
+  <script type="module" src="./app.js?v=inside-outside"></script>
 </body>
 </html>

@@ -119,7 +119,46 @@ const torusRulingB=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.L
 groups.torus.add(torusSurface,torusCellLines,torusRulingA,torusRulingB);
 function torusCellAt(q){const centers=torusGridSource==='cell120'?poly.v:dualVertices;let best=0,bestDot=-Infinity;for(let i=0;i<centers.length;i++){const c=centers[i],score=q[0]*c[0]+q[1]*c[1]+q[2]*c[2]+q[3]*c[3];if(score>bestDot){bestDot=score;best=i}}return best}
 function setTorusSurface(positions,colors,linePts){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();torusSurface.geometry.dispose();torusSurface.geometry=geo;torusCellLines.geometry.dispose();torusCellLines.geometry=new THREE.BufferGeometry().setFromPoints(linePts)}
-function buildHopfTorusGrid(){const N=12,NU=180,NV=120,du=Math.PI*2/NU,dv=Math.PI*2/NV,positions=[],colors=[],rulings=[[],[]],mod=x=>(x%(Math.PI*2)+Math.PI*2)%(Math.PI*2),palette=torusPalettes.hopf;const addTriangle=(qs,colorIndex)=>{if(colorIndex===0)return;const ps=qs.map(project);if(!triangleVisible(ps[0],ps[1],ps[2]))return;const color=new THREE.Color(palette[colorIndex]);for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}};for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){const u=i*du,v=j*dv,q00=torusPoint(u,v),q10=torusPoint(u+du,v),q01=torusPoint(u,v+dv),q11=torusPoint(u+du,v+dv),a=Math.floor(mod(v-u)/Math.PI/2*N),b=Math.floor(mod(u+v)/Math.PI/2*N),shade=(a+b)&1;addTriangle([q00,q10,q01],shade);addTriangle([q10,q11,q01],shade)}for(const[family,sign]of[-1,1].entries())for(let k=0;k<N;k++){const offset=k/N*Math.PI*2;let previous=null;for(let s=0;s<=360;s++){const u=s/360*Math.PI*2,v=sign===1?u+offset:offset-u,p=project(torusPoint(u,v));if(previous&&segmentVisible(previous,p))rulings[family].push(previous,p);previous=p}}setTorusSurface(positions,colors,[]);torusRulingA.geometry.dispose();torusRulingA.geometry=new THREE.BufferGeometry().setFromPoints(rulings[0]);torusRulingB.geometry.dispose();torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);document.querySelector('#grid-description').textContent='Hopf rulings · 12 + 12 circles';document.querySelector('#intersection-count').value=24;document.querySelector('#intersection-label').textContent='CIRCLES IN TWO RULINGS'}
+function buildHopfTorusGrid(){
+  const N=12,SUBDIVISIONS=6,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],palette=torusPalettes.hopf;
+  const point=(a,b)=>torusPoint((b-a)/2,(a+b)/2);
+  const addTriangle=(qs,colorIndex)=>{
+    if(colorIndex===0)return;
+    const ps=qs.map(project);
+    if(!triangleVisible(ps[0],ps[1],ps[2]))return;
+    const color=new THREE.Color(palette[colorIndex]);
+    for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}
+  };
+  // In Hopf coordinates a=v-u and b=u+v, each tile edge is itself a fiber.
+  // b runs through 4π so this rectangle covers the torus exactly once.
+  for(let ia=0;ia<N;ia++)for(let ib=0;ib<2*N;ib++){
+    const shade=(ia+ib)&1;
+    for(let i=0;i<SUBDIVISIONS;i++)for(let j=0;j<SUBDIVISIONS;j++){
+      const a0=(ia+i/SUBDIVISIONS)*step,a1=(ia+(i+1)/SUBDIVISIONS)*step;
+      const b0=(ib+j/SUBDIVISIONS)*step,b1=(ib+(j+1)/SUBDIVISIONS)*step;
+      const q00=point(a0,b0),q10=point(a1,b0),q01=point(a0,b1),q11=point(a1,b1);
+      addTriangle([q00,q10,q01],shade);
+      addTriangle([q10,q11,q01],shade);
+    }
+  }
+  for(const[family,sign]of[-1,1].entries())for(let k=0;k<N;k++){
+    const offset=k/N*Math.PI*2;
+    let previous=null;
+    for(let s=0;s<=360;s++){
+      const u=s/360*Math.PI*2,v=sign===1?u+offset:offset-u,p=project(torusPoint(u,v));
+      if(previous&&segmentVisible(previous,p))rulings[family].push(previous,p);
+      previous=p;
+    }
+  }
+  setTorusSurface(positions,colors,[]);
+  torusRulingA.geometry.dispose();
+  torusRulingA.geometry=new THREE.BufferGeometry().setFromPoints(rulings[0]);
+  torusRulingB.geometry.dispose();
+  torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);
+  document.querySelector('#grid-description').textContent='Hopf rulings · 12 + 12 circles';
+  document.querySelector('#intersection-count').value=24;
+  document.querySelector('#intersection-label').textContent='CIRCLES IN TWO RULINGS';
+}
 function buildTorusCellGrid(){
   const NU=180,NV=120,du=Math.PI*2/NU,dv=Math.PI*2/NV;
   const centers=torusGridSource==='cell120'?poly.v:dualVertices;
@@ -262,10 +301,9 @@ for(const ci of boundaryCells){const c=poly.cells[ci];for(let i=0;i<4;i++)for(le
 groups.boundary.add(lineSegments(cellPairs,0x194fb7,.82));
 
 groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=false;groups.intersections.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
-const modeLabel=document.querySelector('#mode-label');
-const numberEls=[...document.querySelectorAll('.numbers div')];
+const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
-function applyMode(mode){visualMode=mode;torusGridSource=mode;groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';modeLabel.textContent=mode==='hopf'?'TWO HOPF RULINGS':mode==='cell600'?'600-CELL INTERSECTION':'120-CELL INTERSECTION';const stats=mode==='hopf'?[[2,'RULINGS'],[24,'SHOWN CIRCLES'],[288,'PATCHES'],['∞','FIBERS']]:mode==='cell120'?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]});document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');updateTorusGeometry()}
+function applyMode(mode){visualMode=mode;torusGridSource=mode;groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=mode==='hopf'?'HOPF FIBRATION':`${label} INTERSECTION`;document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');updateTorusGeometry()}
 modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)applyMode(input.value)}));
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});

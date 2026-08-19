@@ -32,15 +32,10 @@
           <span class="live"><i></i> LIVE PROJECTION</span>
         </div>
         <div class="stage-help">DRAG TO ORBIT · SCROLL TO ZOOM</div>
-        <div class="legend" aria-hidden="true">
-          <span><i class="fiber-dot"></i>HOPF</span>
-          <span><i class="cell-dot"></i>600-CELL</span>
-          <span><i class="dual-dot"></i>120-CELL</span>
-        </div>
       </div>
 
       <aside class="controls" aria-label="Visualization layers" tabindex="0">
-        <button class="sidebar-trigger" id="sidebar-trigger" type="button" aria-expanded="false"><span>EXPLORE S³</span><b>›</b></button>
+        <button class="sidebar-trigger" id="sidebar-trigger" type="button" aria-expanded="false"><span id="sidebar-mode">HOPF MODE</span><b>›</b></button>
         <p class="panel-kicker">THREE VIEWS</p>
         <div class="mode-picker" role="radiogroup" aria-label="Structure dividing the torus">
           <label class="mode-row"><input type="radio" name="view-mode" value="hopf" checked><i>01</i><span><b>Hopf fibrations</b><small>Two circle rulings on the torus</small></span></label>
@@ -57,13 +52,6 @@
         <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2" aria-label="Morph torus from z-axis to equatorial circle">
         <span class="sr-only"><output id="morph-value">η 31.7°</output><output id="intersection-count">24</output><span id="intersection-label">CIRCLES IN TWO RULINGS</span></span>
       </div>
-    </section>
-
-    <section class="numbers" aria-label="600-cell counts">
-      <div><strong>120</strong><span>VERTICES</span></div>
-      <div><strong>720</strong><span>EDGES</span></div>
-      <div><strong>1,200</strong><span>TRIANGLES</span></div>
-      <div><strong>600</strong><span>TETRAHEDRA</span></div>
     </section>
 
     <section class="explain">
@@ -96,6 +84,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=sweeping-cell-highlights"></script>
+  <script type="module" src="./app.js?v=exact-hopf-tiles"></script>
 </body>
 </html>

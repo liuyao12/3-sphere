@@ -109,6 +109,10 @@ groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
 let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10));
 function torusPoint(u,v){const torusR=Math.cos(torusEta),torusr=Math.sin(torusEta);return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
 const AMBIENT_HOPF_COUNT=48,ambientHopfPoints=[],goldenAngle=Math.PI*(3-Math.sqrt(5));
+function hopfFiberPoint(eta,delta,t){return basisU.map((_,i)=>
+  Math.cos(eta)*(Math.cos(t)*basisU[i]+Math.sin(t)*basisV[i])+
+  Math.sin(eta)*(Math.cos(t+delta)*basisN[i]+Math.sin(t+delta)*basisM[i])
+)}
 for(let fiber=0;fiber<AMBIENT_HOPF_COUNT;fiber++){
   // Fibonacci points on the Hopf base S² give an even, uncluttered selection
   // of fibers from the standard family v=u+delta.
@@ -116,18 +120,31 @@ for(let fiber=0;fiber<AMBIENT_HOPF_COUNT;fiber++){
   const eta=.5*Math.acos(baseZ),delta=(fiber*goldenAngle)%(Math.PI*2);
   let previous=null;
   for(let step=0;step<=540;step++){
-    const t=step/540*Math.PI*2,q=basisU.map((_,i)=>
-      Math.cos(eta)*(Math.cos(t)*basisU[i]+Math.sin(t)*basisV[i])+
-      Math.sin(eta)*(Math.cos(t+delta)*basisN[i]+Math.sin(t+delta)*basisM[i])
-    ),p=project(q);
+    const t=step/540*Math.PI*2,p=project(hopfFiberPoint(eta,delta,t));
     if(previous&&segmentVisible(previous,p))ambientHopfPoints.push(previous,p);
     previous=p;
   }
 }
-groups.hopf.add(new THREE.LineSegments(
+const ambientHopfFibers=new THREE.LineSegments(
   new THREE.BufferGeometry().setFromPoints(ambientHopfPoints),
   new THREE.LineBasicMaterial({color:0x6846c7,transparent:true,opacity:.2,depthWrite:false})
-));
+),selectedHopfFiber=new THREE.LineSegments(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({color:0x245bd6,transparent:true,opacity:1,depthWrite:false})
+);
+groups.hopf.add(ambientHopfFibers,selectedHopfFiber);
+function updateSelectedHopfFiber(baseX,baseY){
+  const baseZ=Math.sqrt(Math.max(0,1-baseX*baseX-baseY*baseY));
+  const eta=.5*Math.acos(baseZ),delta=Math.atan2(baseY,baseX),points=[];
+  let previous=null;
+  for(let step=0;step<=720;step++){
+    const t=step/720*Math.PI*2,p=project(hopfFiberPoint(eta,delta,t));
+    if(previous&&segmentVisible(previous,p))points.push(previous,p);
+    previous=p;
+  }
+  selectedHopfFiber.geometry.dispose();
+  selectedHopfFiber.geometry=new THREE.BufferGeometry().setFromPoints(points);
+}
 function colorGraph(count,edges){const neighbors=Array.from({length:count},()=>new Set());for(const[a,b]of edges){neighbors[a].add(b);neighbors[b].add(a)}const colors=Array(count).fill(-1);for(let done=0;done<count;done++){let pick=-1,bestSat=-1,bestDegree=-1;for(let i=0;i<count;i++)if(colors[i]<0){const sat=new Set([...neighbors[i]].map(n=>colors[n]).filter(c=>c>=0)).size,degree=neighbors[i].size;if(sat>bestSat||sat===bestSat&&degree>bestDegree){pick=i;bestSat=sat;bestDegree=degree}}const used=new Set([...neighbors[pick]].map(n=>colors[n]).filter(c=>c>=0));let color=0;while(used.has(color))color++;colors[pick]=color}return colors}
 const torusPalettes={cell600:[0x245bd6,0x6c50d6,0x2183c4,0x8975e6,0x3a6aad,0x7653aa],cell120:[0x6948cf,0x2b78cf,0x3c9bb7,0x8b66da,0x4966b7,0x7453a8],hopf:[0x245bd6,0x7255d9]};
 const torusColorings={cell600:colorGraph(dualVertices.length,dualEdges),cell120:colorGraph(poly.v.length,poly.edges)};
@@ -320,6 +337,22 @@ groups.boundary.add(lineSegments(cellPairs,0x194fb7,.82));
 groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=false;groups.intersections.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
+const hopfBaseControl=document.querySelector('#hopf-base-control'),hopfBase=document.querySelector('#hopf-base'),hopfBasePoint=document.querySelector('#hopf-base-point'),hopfBaseHalo=document.querySelector('#hopf-base-halo');
+let hopfBaseX=Math.sin(2*torusEta)*Math.cos(.62),hopfBaseY=Math.sin(2*torusEta)*Math.sin(.62);
+function setHopfBasePoint(x,y){
+  const radius=Math.hypot(x,y),scale=radius>.985?.985/radius:1;
+  hopfBaseX=x*scale;hopfBaseY=y*scale;
+  for(const point of[hopfBasePoint,hopfBaseHalo]){point.setAttribute('cx',hopfBaseX);point.setAttribute('cy',-hopfBaseY)}
+  updateSelectedHopfFiber(hopfBaseX,hopfBaseY);
+}
+function setHopfBaseFromPointer(event){
+  const rect=hopfBase.getBoundingClientRect();
+  setHopfBasePoint((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12));
+}
+hopfBase.addEventListener('pointerdown',event=>{hopfBase.setPointerCapture(event.pointerId);setHopfBaseFromPointer(event)});
+hopfBase.addEventListener('pointermove',event=>{if(hopfBase.hasPointerCapture(event.pointerId))setHopfBaseFromPointer(event)});
+hopfBase.addEventListener('keydown',event=>{const step=event.shiftKey ? .1 : .035;if(event.key==='ArrowLeft')setHopfBasePoint(hopfBaseX-step,hopfBaseY);else if(event.key==='ArrowRight')setHopfBasePoint(hopfBaseX+step,hopfBaseY);else if(event.key==='ArrowUp')setHopfBasePoint(hopfBaseX,hopfBaseY+step);else if(event.key==='ArrowDown')setHopfBasePoint(hopfBaseX,hopfBaseY-step);else return;event.preventDefault()});
+setHopfBasePoint(hopfBaseX,hopfBaseY);
 const publicModeNames={hopf:'hopf',cell600:'600-cell',cell120:'120-cell'};
 const internalModeNames={hopf:'hopf','600-cell':'cell600','120-cell':'cell120'};
 function modeFromUrl(){return internalModeNames[new URL(location.href).searchParams.get('mode')]||'hopf'}
@@ -330,7 +363,7 @@ function writeModeUrl(mode,action){
   url.searchParams.set('mode',publicName);
   history[`${action}State`](null,'',url);
 }
-function applyMode(mode,urlAction){visualMode=mode;torusGridSource=mode;groups.hopf.visible=mode==='hopf';groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=mode==='hopf'?'HOPF FIBRATION':`${label} INTERSECTION`;document.title=`${label} — The 3-sphere, opened up`;document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');writeModeUrl(mode,urlAction);updateTorusGeometry()}
+function applyMode(mode,urlAction){visualMode=mode;torusGridSource=mode;groups.hopf.visible=mode==='hopf';hopfBaseControl.hidden=mode!=='hopf';groups.cell.visible=mode==='cell600';groups.intersections.visible=mode!=='hopf';groups.cell120.visible=mode==='cell120';const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=mode==='hopf'?'HOPF FIBRATION':`${label} INTERSECTION`;document.title=`${label} — The 3-sphere, opened up`;document.querySelector('#atlas-card').classList.toggle('lit',mode==='cell600');writeModeUrl(mode,urlAction);updateTorusGeometry()}
 function selectMode(mode,urlAction){const input=modeInputs.find(candidate=>candidate.value===mode);if(input)input.checked=true;applyMode(mode,urlAction)}
 modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)applyMode(input.value,'push')}));
 window.addEventListener('popstate',()=>selectMode(modeFromUrl()));

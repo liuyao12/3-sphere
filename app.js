@@ -120,7 +120,101 @@ groups.torus.add(torusSurface,torusCellLines,torusRulingA,torusRulingB);
 function torusCellAt(q){const centers=torusGridSource==='cell120'?poly.v:dualVertices;let best=0,bestDot=-Infinity;for(let i=0;i<centers.length;i++){const c=centers[i],score=q[0]*c[0]+q[1]*c[1]+q[2]*c[2]+q[3]*c[3];if(score>bestDot){bestDot=score;best=i}}return best}
 function setTorusSurface(positions,colors,linePts){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();torusSurface.geometry.dispose();torusSurface.geometry=geo;torusCellLines.geometry.dispose();torusCellLines.geometry=new THREE.BufferGeometry().setFromPoints(linePts)}
 function buildHopfTorusGrid(){const N=12,NU=180,NV=120,du=Math.PI*2/NU,dv=Math.PI*2/NV,positions=[],colors=[],rulings=[[],[]],mod=x=>(x%(Math.PI*2)+Math.PI*2)%(Math.PI*2),palette=torusPalettes.hopf;const addTriangle=(qs,colorIndex)=>{if(colorIndex===0)return;const ps=qs.map(project);if(!triangleVisible(ps[0],ps[1],ps[2]))return;const color=new THREE.Color(palette[colorIndex]);for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}};for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){const u=i*du,v=j*dv,q00=torusPoint(u,v),q10=torusPoint(u+du,v),q01=torusPoint(u,v+dv),q11=torusPoint(u+du,v+dv),a=Math.floor(mod(v-u)/Math.PI/2*N),b=Math.floor(mod(u+v)/Math.PI/2*N),shade=(a+b)&1;addTriangle([q00,q10,q01],shade);addTriangle([q10,q11,q01],shade)}for(const[family,sign]of[-1,1].entries())for(let k=0;k<N;k++){const offset=k/N*Math.PI*2;let previous=null;for(let s=0;s<=360;s++){const u=s/360*Math.PI*2,v=sign===1?u+offset:offset-u,p=project(torusPoint(u,v));if(previous&&segmentVisible(previous,p))rulings[family].push(previous,p);previous=p}}setTorusSurface(positions,colors,[]);torusRulingA.geometry.dispose();torusRulingA.geometry=new THREE.BufferGeometry().setFromPoints(rulings[0]);torusRulingB.geometry.dispose();torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);document.querySelector('#grid-description').textContent='Hopf rulings · 12 + 12 circles';document.querySelector('#intersection-count').value=24;document.querySelector('#intersection-label').textContent='CIRCLES IN TWO RULINGS'}
-function buildTorusCellGrid(){const NU=180,NV=120,du=Math.PI*2/NU,dv=Math.PI*2/NV,labels=Array.from({length:NU},()=>new Int32Array(NV)),positions=[],colors=[],linePts=[],palette=torusPalettes[torusGridSource],used=new Set(),adjacency=[],seenAdjacency=new Set(),centerCount=torusGridSource==='cell120'?poly.v.length:poly.cells.length;for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){const id=torusCellAt(torusPoint((i+.5)*du,(j+.5)*dv));labels[i][j]=id;used.add(id)}for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){const id=labels[i][j];for(const other of[labels[(i+1)%NU][j],labels[i][(j+1)%NV]])if(id!==other){const key=id<other?`${id},${other}`:`${other},${id}`;if(!seenAdjacency.has(key)){seenAdjacency.add(key);adjacency.push([id,other])}}}const coloring=colorGraph(centerCount,adjacency),colorCount=Math.max(...[...used].map(id=>coloring[id]))+1;const addTriangle=(qs,id)=>{if(torusGridSource==='cell600'&&(coloring[id]&1)===0)return;const ps=qs.map(project);if(!triangleVisible(ps[0],ps[1],ps[2]))return;const color=new THREE.Color(palette[coloring[id]%palette.length]);for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}};for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){const u=i*du,v=j*dv,q00=torusPoint(u,v),q10=torusPoint(u+du,v),q01=torusPoint(u,v+dv),q11=torusPoint(u+du,v+dv),id=labels[i][j];addTriangle([q00,q10,q01],id);addTriangle([q10,q11,q01],id);if(id!==labels[(i+1)%NU][j]){const a=project(q10),b=project(q11);if(segmentVisible(a,b))linePts.push(a,b)}if(id!==labels[i][(j+1)%NV]){const a=project(q01),b=project(q11);if(segmentVisible(a,b))linePts.push(a,b)}}setTorusSurface(positions,colors,linePts);for(const ruling of[torusRulingA,torusRulingB]){ruling.geometry.dispose();ruling.geometry=new THREE.BufferGeometry()}document.querySelector('#grid-description').textContent=`${torusGridSource==='cell120'?'120':'600'}-cell · ${used.size} patches · ${colorCount} colors`;document.querySelector('#intersection-count').value=used.size;document.querySelector('#intersection-label').textContent=torusGridSource==='cell120'?'DODECAHEDRA MEET TORUS':'TETRAHEDRA MEET TORUS'}
+function buildTorusCellGrid(){
+  const NU=180,NV=120,du=Math.PI*2/NU,dv=Math.PI*2/NV;
+  const centers=torusGridSource==='cell120'?poly.v:dualVertices;
+  const centerCount=centers.length,palette=torusPalettes[torusGridSource];
+  const labels=Array.from({length:NU+1},()=>new Int32Array(NV+1));
+  const positions=[],colors=[],linePts=[],used=new Set(),adjacency=[],seenAdjacency=new Set();
+
+  for(let i=0;i<=NU;i++)for(let j=0;j<=NV;j++){
+    const id=torusCellAt(torusPoint(i*du,j*dv));
+    labels[i][j]=id;
+    used.add(id);
+  }
+
+  const triangles=[];
+  const registerTriangle=vs=>{
+    triangles.push(vs);
+    const ids=[...new Set(vs.map(v=>v.id))];
+    for(let a=0;a<ids.length;a++)for(let b=a+1;b<ids.length;b++){
+      const lo=Math.min(ids[a],ids[b]),hi=Math.max(ids[a],ids[b]),key=`${lo},${hi}`;
+      if(!seenAdjacency.has(key)){seenAdjacency.add(key);adjacency.push([lo,hi])}
+    }
+  };
+  for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){
+    const u=i*du,v=j*dv;
+    const a={u,v,q:torusPoint(u,v),id:labels[i][j]};
+    const b={u:u+du,v,q:torusPoint(u+du,v),id:labels[i+1][j]};
+    const c={u,v:v+dv,q:torusPoint(u,v+dv),id:labels[i][j+1]};
+    const d={u:u+du,v:v+dv,q:torusPoint(u+du,v+dv),id:labels[i+1][j+1]};
+    registerTriangle([a,b,c]);
+    registerTriangle([b,d,c]);
+  }
+
+  const coloring=colorGraph(centerCount,adjacency);
+  const colorCount=Math.max(...[...used].map(id=>coloring[id]))+1;
+  const addTriangle=(qs,id)=>{
+    if(torusGridSource==='cell600'&&(coloring[id]&1)===0)return;
+    const ps=qs.map(project);
+    if(!triangleVisible(ps[0],ps[1],ps[2]))return;
+    const color=new THREE.Color(palette[coloring[id]%palette.length]);
+    for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}
+  };
+  const addPolygon=(qs,id)=>{
+    for(let k=1;k+1<qs.length;k++)addTriangle([qs[0],qs[k],qs[k+1]],id);
+  };
+  const crossing=(a,b)=>{
+    const ca=centers[a.id],cb=centers[b.id];
+    let lo=0,hi=1;
+    for(let k=0;k<16;k++){
+      const t=(lo+hi)/2,q=torusPoint(a.u+(b.u-a.u)*t,a.v+(b.v-a.v)*t);
+      const f=dot(q,ca)-dot(q,cb);
+      if(f>=0)lo=t;else hi=t;
+    }
+    const t=(lo+hi)/2;
+    return torusPoint(a.u+(b.u-a.u)*t,a.v+(b.v-a.v)*t);
+  };
+
+  for(const vs of triangles){
+    const ids=[...new Set(vs.map(v=>v.id))];
+    if(ids.length===1){addTriangle(vs.map(v=>v.q),ids[0]);continue}
+    const edgeCrossings=new Array(3);
+    for(let e=0;e<3;e++){
+      const a=vs[e],b=vs[(e+1)%3];
+      if(a.id!==b.id)edgeCrossings[e]=crossing(a,b);
+    }
+    if(ids.length===2){
+      for(const id of ids){
+        const polygon=[];
+        for(let e=0;e<3;e++){
+          const a=vs[e],b=vs[(e+1)%3];
+          if(a.id===id)polygon.push(a.q);
+          if(a.id!==b.id&&(a.id===id||b.id===id))polygon.push(edgeCrossings[e]);
+        }
+        addPolygon(polygon,id);
+      }
+      const cuts=edgeCrossings.filter(Boolean).map(project);
+      if(cuts.length===2&&segmentVisible(cuts[0],cuts[1]))linePts.push(cuts[0],cuts[1]);
+    }else{
+      const junction=torusPoint(
+        (vs[0].u+vs[1].u+vs[2].u)/3,
+        (vs[0].v+vs[1].v+vs[2].v)/3
+      );
+      for(let i=0;i<3;i++){
+        const next=edgeCrossings[i],previous=edgeCrossings[(i+2)%3];
+        addPolygon([vs[i].q,next,junction,previous],vs[i].id);
+      }
+      const jp=project(junction);
+      for(const q of edgeCrossings){const p=project(q);if(segmentVisible(p,jp))linePts.push(p,jp)}
+    }
+  }
+  setTorusSurface(positions,colors,linePts);
+  for(const ruling of[torusRulingA,torusRulingB]){ruling.geometry.dispose();ruling.geometry=new THREE.BufferGeometry()}
+  document.querySelector('#grid-description').textContent=`${torusGridSource==='cell120'?'120':'600'}-cell · ${used.size} patches · ${colorCount} colors`;
+  document.querySelector('#intersection-count').value=used.size;
+  document.querySelector('#intersection-label').textContent=torusGridSource==='cell120'?'DODECAHEDRA MEET TORUS':'TETRAHEDRA MEET TORUS';
+}
 const vertexRadials=poly.v.map(q=>dot(q,basisU)**2+dot(q,basisV)**2);
 const canonicalLevel=(5+Math.sqrt(5))/10;
 const intersectionLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6d28d9,transparent:true,opacity:.7,depthWrite:false}));

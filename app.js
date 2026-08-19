@@ -379,6 +379,13 @@ function portalPatternGeometry(vertices,face,mode){
     // every other sector gives a symmetric checkerboard analogue on a pentagon.
     for(let i=0;i<5;i++){const a=vertices[face[i]],b=vertices[face[(i+1)%5]],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,6)}
   }
+  // Give every painted fragment an outward winding. From the cell center the
+  // visible sheet is therefore its back side; after crossing it is the front.
+  for(let i=0;i<positions.length;i+=9){
+    const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8];
+    const ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+    if(nx*(ax+bx+cx)+ny*(ay+by+cy)+nz*(az+bz+cz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}
+  }
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo;
 }
 function rebuildWalkCell(includeContext=true){
@@ -389,10 +396,10 @@ function rebuildWalkCell(includeContext=true){
     // The face is one geometric sheet. Its tint previews the cell reached by
     // crossing it; after crossing, the reverse portal is tinted with the old
     // cell's stable graph color. This avoids doubled coplanar transparent walls.
-    const destinationColor=walkCellColor(visualMode,entry.neighbor);
-    const pattern=new THREE.Mesh(portalPatternGeometry(entry.vertices,entry.face,visualMode),new THREE.MeshPhongMaterial({color:destinationColor,transparent:true,opacity:.2,side:THREE.DoubleSide,depthWrite:false,shininess:35}));pattern.renderOrder=2;
+    const destinationColor=walkCellColor(visualMode,entry.neighbor),innerGeometry=portalPatternGeometry(entry.vertices,entry.face,visualMode),outerGeometry=innerGeometry.clone();
+    const innerPattern=new THREE.Mesh(innerGeometry,new THREE.MeshPhongMaterial({color:currentColor,side:THREE.BackSide,shininess:25})),outerPattern=new THREE.Mesh(outerGeometry,new THREE.MeshPhongMaterial({color:destinationColor,side:THREE.FrontSide,shininess:25}));innerPattern.renderOrder=2;outerPattern.renderOrder=2;
     const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],8),new THREE.MeshBasicMaterial({transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,colorWrite:false}));
-    mesh.userData={portal:true,neighbor:entry.neighbor,face:index,visual:pattern};mesh.renderOrder=3;groups.walk.add(pattern,mesh);
+    mesh.userData={portal:true,neighbor:entry.neighbor,face:index,visuals:[innerPattern,outerPattern]};mesh.renderOrder=3;groups.walk.add(innerPattern,outerPattern,mesh);
     for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!seen.has(key)){seen.add(key);allPairs.push([a,b])}}
   });
   const vertices=faces[0]?.vertices||poly.v;
@@ -468,7 +475,7 @@ function setWalkView(active,urlAction='push'){
     const center=currentWalkCenter(),baseAxis=tangentFrame(center,overviewAxes);setWalkChart(center,baseAxis);
     controls.enabled=false;camera.near=.015;camera.fov=72;camera.updateProjectionMatrix();rebuildChart(false);aimInsideAtFirstFace();
   }else{
-    controls.enabled=true;camera.near=.05;camera.fov=38;camera.updateProjectionMatrix();projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;controls.minDistance=4;controls.maxDistance=32;camera.position.set(7.4,8.8,13);controls.target.set(0,0,0);groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();
+    controls.enabled=true;camera.near=.05;camera.fov=38;camera.updateProjectionMatrix();projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;controls.minDistance=4;controls.maxDistance=32;camera.up.set(0,0,1);camera.position.set(7.4,8.8,13);controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update();groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();
   }
   stageHelp.textContent=active?'DRAG TO LOOK · CLICK A FACE TO CROSS':'DRAG TO ORBIT · SCROLL TO ZOOM';
   writeViewUrl(urlAction);
@@ -476,6 +483,7 @@ function setWalkView(active,urlAction='push'){
 walkToggle.addEventListener('click',()=>setWalkView(!walkView));
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&walkView)setWalkView(false)});
 function portalAtEvent(event){const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.intersectObjects(groups.walk.children.filter(x=>x.userData.portal))[0]?.object||null}
+function setPortalHover(portal,active){for(const visual of portal?.userData.visuals||[]){visual.material.emissive.setHex(active?0xffffff:0x000000);visual.material.emissiveIntensity=active?.2:0}}
 function localRayAtEvent(event){
   const rect=renderer.domElement.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width*2-1,y=-(event.clientY-rect.top)/rect.height*2+1,tanHalfFov=Math.tan(THREE.MathUtils.degToRad(camera.fov*.5));
   return new THREE.Vector3(x*tanHalfFov*camera.aspect,y*tanHalfFov,-1).normalize();
@@ -486,7 +494,7 @@ renderer.domElement.addEventListener('pointerdown',event=>{
 });
 renderer.domElement.addEventListener('pointermove',event=>{
   if(!walkView||walkAnimating)return;if(insidePointer){insideCandidateDirection.copy(localRayAtEvent(event)).applyQuaternion(insideStartQuaternion);insideDeltaQuaternion.setFromUnitVectors(insideCandidateDirection,insideGrabDirection);camera.quaternion.copy(insideDeltaQuaternion).multiply(insideStartQuaternion);camera.position.set(0,0,0);camera.updateMatrixWorld()}
-  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.userData.visual.material.opacity=.2;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.userData.visual.material.opacity=.42;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
+  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;setPortalHover(hoveredPortal,false);hoveredPortal=hit;setPortalHover(hoveredPortal,true);renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
 });
 renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.style.cursor=hoveredPortal?'pointer':'grab';renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
 renderer.domElement.addEventListener('pointercancel',event=>{insidePointer=false;if(renderer.domElement.hasPointerCapture(event.pointerId))renderer.domElement.releasePointerCapture(event.pointerId);renderer.domElement.style.cursor=walkView?'grab':''});

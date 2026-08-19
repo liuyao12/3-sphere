@@ -37,6 +37,7 @@
         <div class="stage-help">DRAG TO ORBIT · SCROLL TO ZOOM</div>
         <div class="legend" aria-hidden="true">
           <span><i class="torus-dot"></i>TORUS</span>
+          <span><i class="extreme-dot"></i>EXTREMES</span>
           <span><i class="fiber-dot"></i>HOPF FIBER</span>
           <span><i class="cell-dot"></i>600-CELL</span>
           <span><i class="dual-dot"></i>120-CELL</span>
@@ -48,6 +49,10 @@
         <label class="toggle-row">
           <span><b>Separating torus</b><small>Clifford torus + 10 × 10 grid</small></span>
           <input id="toggle-torus" type="checkbox" checked><i></i>
+        </label>
+        <label class="toggle-row">
+          <span><b>Extremal fibers</b><small>Circle + vertical z-axis</small></span>
+          <input id="toggle-extremes" type="checkbox" checked><i></i>
         </label>
         <label class="toggle-row">
           <span><b>Hopf fibration</b><small>Linked circle fibers</small></span>
@@ -103,7 +108,7 @@
 
     <section class="steps">
       <article><span>01</span><h3>Stereographic projection</h3><p>A point <i>(x, y, z, w)</i> on S³ maps to <i>(x, y, z)/(1 − w)</i>. One pole escapes to infinity; circles remain circles or become lines.</p></article>
-      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. After projection, any two distinct fibers are linked—even when the perspective makes them appear to pass apart.</p></article>
+      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. At the two extremes of the torus family, one remains a circle while the fiber through the projection pole opens into the z-axis.</p></article>
       <article><span>03</span><h3>The 600-cell</h3><p>Its tetrahedra are regular in ℝ⁴. Projection preserves incidence and angles locally, but not lengths, so they stretch dramatically in ℝ³.</p></article>
     </section>
 
@@ -112,6 +117,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=checkerboard2"></script>
+  <script type="module" src="./app.js?v=extremes"></script>
 </body>
 </html>

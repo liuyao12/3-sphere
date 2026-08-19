@@ -6,7 +6,8 @@ const stage=document.querySelector('#stage');
 const scene=new THREE.Scene();
 scene.fog=new THREE.FogExp2(0x080d14,.025);
 const camera=new THREE.PerspectiveCamera(38,1,.05,160);
-camera.position.set(7.4,13,8.8);
+camera.up.set(0,0,1);
+camera.position.set(7.4,8.8,13);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setClearColor(0x000000,0);
@@ -15,14 +16,14 @@ stage.append(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.055;controls.minDistance=4;controls.maxDistance=32;
 
-const groups={torus:new THREE.Group(),hopf:new THREE.Group(),cell:new THREE.Group(),cell120:new THREE.Group(),boundary:new THREE.Group(),seam120:new THREE.Group()};
+const groups={torus:new THREE.Group(),extremes:new THREE.Group(),hopf:new THREE.Group(),cell:new THREE.Group(),cell120:new THREE.Group(),boundary:new THREE.Group(),seam120:new THREE.Group()};
 Object.values(groups).forEach(g=>scene.add(g));
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const norm=a=>Math.sqrt(dot(a,a));
 const normalize=a=>{const n=norm(a);return a.map(x=>x/n)};
 const d2=(a,b)=>a.reduce((s,x,i)=>s+(x-b[i])**2,0);
 let projectionPole,projectionAxes;
-function project(q){const den=Math.max(.04,1-dot(q,projectionPole)),c=projectionAxes.map(axis=>dot(q,axis)/den);return new THREE.Vector3(c[1],c[0],c[2]).multiplyScalar(1.05)}
+function project(q){const den=Math.max(.04,1-dot(q,projectionPole)),c=projectionAxes.map(axis=>dot(q,axis)/den);return new THREE.Vector3(c[1],c[2],c[0]).multiplyScalar(1.05)}
 
 function permutations(a){const out=[];function go(k){if(k===a.length){out.push([...a]);return}for(let i=k;i<a.length;i++){[a[k],a[i]]=[a[i],a[k]];go(k+1);[a[k],a[i]]=[a[i],a[k]]}}go(0);return out}
 function parity(p){let n=0;for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)n+=p[i]>p[j];return n%2}
@@ -60,6 +61,11 @@ const [basisN,basisM]=complement(basisU,basisV);
 // the separating Clifford torus, so the torus projects to a compact ring.
 projectionPole=basisU.map((x,i)=>Math.cos(.17)*x+Math.sin(.17)*basisV[i]);
 projectionAxes=[basisU.map((x,i)=>-Math.sin(.17)*x+Math.cos(.17)*basisV[i]),basisN,basisM];
+const extremeMaterial=new THREE.LineBasicMaterial({color:0x5ce1e6,transparent:true,opacity:.92,depthWrite:false});
+const extremeCircle=[];
+for(let i=0;i<=180;i++){const t=i/180*Math.PI*2;extremeCircle.push(project(basisN.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisM[k])))}
+groups.extremes.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(extremeCircle),extremeMaterial));
+groups.extremes.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-15),new THREE.Vector3(0,0,15)]),new THREE.LineBasicMaterial({color:0x8ff3d5,transparent:true,opacity:.72,depthWrite:false})));
 groups.cell.add(lineSegments(poly.edges,0xf3c75b,.28));
 const vertexGeo=new THREE.SphereGeometry(.035,7,7),vertexMat=new THREE.MeshBasicMaterial({color:0xffd971,transparent:true,opacity:.8});
 for(const q of poly.v){const p=project(q);if(p.length()<42){const m=new THREE.Mesh(vertexGeo,vertexMat);m.position.copy(p);groups.cell.add(m)}}
@@ -114,11 +120,11 @@ function addCurve(points,color,opacity=.82){const geo=new THREE.BufferGeometry()
 const palette=[0x5ce1e6,0x74b9ff,0xcf8cff,0x68f0b0];
 for(let lat=0;lat<4;lat++){const eta=.18+(lat+.5)/4*1.20;for(let k=0;k<5;k++){const alpha=k/5*Math.PI*2+lat*.23,beta=-k/5*Math.PI*2*.62+lat*.71,pts=[];for(let s=0;s<=180;s++){const t=s/180*Math.PI*2,q=[Math.cos(eta)*Math.cos(alpha+t),Math.cos(eta)*Math.sin(alpha+t),Math.sin(eta)*Math.cos(beta+t),Math.sin(eta)*Math.sin(beta+t)],p=project(q);if(p.length()<42)pts.push(p)}addCurve(pts,palette[lat],.76)}}
 
-groups.hopf.visible=false;groups.cell.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
-const toggles={torus:document.querySelector('#toggle-torus'),hopf:document.querySelector('#toggle-hopf'),cell:document.querySelector('#toggle-cell'),cell120:document.querySelector('#toggle-cell120'),boundary:document.querySelector('#toggle-boundary'),seam120:document.querySelector('#toggle-seam120')};
+groups.extremes.visible=true;groups.hopf.visible=false;groups.cell.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
+const toggles={torus:document.querySelector('#toggle-torus'),extremes:document.querySelector('#toggle-extremes'),hopf:document.querySelector('#toggle-hopf'),cell:document.querySelector('#toggle-cell'),cell120:document.querySelector('#toggle-cell120'),boundary:document.querySelector('#toggle-boundary'),seam120:document.querySelector('#toggle-seam120')};
 const modeLabel=document.querySelector('#mode-label');
 const numberEls=[...document.querySelectorAll('.numbers div')];
-function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.cell120.checked)active.push('120-CELL');if(toggles.boundary.checked)active.push('100-TET SEAM');if(toggles.seam120.checked)active.push('200-PENTAGON SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked);const stats=toggles.cell120.checked&&!toggles.cell.checked?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]})}
+function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.extremes.checked)active.push('CIRCLE + Z-AXIS');if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.cell120.checked)active.push('120-CELL');if(toggles.boundary.checked)active.push('100-TET SEAM');if(toggles.seam120.checked)active.push('200-PENTAGON SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked);const stats=toggles.cell120.checked&&!toggles.cell.checked?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]})}
 Object.values(toggles).forEach(x=>x.addEventListener('change',updateLayers));
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{const value=+opacity.value/100;torusMaterials[0].opacity=value*.25;torusMaterials[1].opacity=Math.min(.9,value*1.9);opacityValue.value=`${opacity.value}%`});
 

@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const PHI=(1+Math.sqrt(5))/2, EPS=1e-7;
 const stage=document.querySelector('#stage');
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0x080d14,.025);
+scene.fog=new THREE.FogExp2(0xf1f5fa,.025);
 const camera=new THREE.PerspectiveCamera(38,1,.05,160);
 camera.up.set(0,0,1);
 camera.position.set(7.4,8.8,13);
@@ -66,8 +66,8 @@ const extremeCircle=[];
 for(let i=0;i<=180;i++){const t=i/180*Math.PI*2;extremeCircle.push(project(basisN.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisM[k])))}
 groups.extremes.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(extremeCircle),extremeMaterial));
 groups.extremes.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-15),new THREE.Vector3(0,0,15)]),new THREE.LineBasicMaterial({color:0x8ff3d5,transparent:true,opacity:.72,depthWrite:false})));
-groups.cell.add(lineSegments(poly.edges,0xf3c75b,.28));
-const vertexGeo=new THREE.SphereGeometry(.035,7,7),vertexMat=new THREE.MeshBasicMaterial({color:0xffd971,transparent:true,opacity:.8});
+groups.cell.add(lineSegments(poly.edges,0x9b6700,.34));
+const vertexGeo=new THREE.SphereGeometry(.035,7,7),vertexMat=new THREE.MeshBasicMaterial({color:0xb47700,transparent:true,opacity:.82});
 for(const q of poly.v){const p=project(q);if(p.length()<42){const m=new THREE.Mesh(vertexGeo,vertexMat);m.position.copy(p);groups.cell.add(m)}}
 
 // Construct the dual 120-cell from the 600 tetrahedron centers. Two dual
@@ -95,8 +95,8 @@ groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
 const torusR=Math.sqrt((5+Math.sqrt(5))/10),torusr=Math.sqrt(1-torusR*torusR);
 function torusPoint(u,v){return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
 const torusMaterials=[
-  new THREE.MeshPhongMaterial({color:0xff6338,emissive:0x311006,transparent:true,opacity:.07,side:THREE.DoubleSide,depthWrite:true,shininess:55}),
-  new THREE.MeshPhongMaterial({color:0xff7047,emissive:0x3d1409,transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:true,shininess:55})
+  new THREE.MeshPhongMaterial({color:0x3b6fd8,emissive:0x07183d,transparent:true,opacity:.07,side:THREE.DoubleSide,depthWrite:true,shininess:55}),
+  new THREE.MeshPhongMaterial({color:0x315fc5,emissive:0x0a1d4c,transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:true,shininess:55})
 ];
 function torusTileGeometry(tileU,tileV){const SU=8,SV=5,positions=[],indices=[];for(let i=0;i<=SU;i++)for(let j=0;j<=SV;j++){const u=(tileU+i/SU)/10*Math.PI*2,v=(tileV+j/SV)/10*Math.PI*2,p=project(torusPoint(u,v));positions.push(p.x,p.y,p.z)}for(let i=0;i<SU;i++)for(let j=0;j<SV;j++){const k=i*(SV+1)+j,kn=(i+1)*(SV+1)+j;indices.push(k,kn,k+1,kn,kn+1,k+1)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();return geo}
 for(let i=0;i<10;i++)for(let j=0;j<10;j++)groups.torus.add(new THREE.Mesh(torusTileGeometry(i,j),torusMaterials[(i+j)%2]));
@@ -104,20 +104,20 @@ function torusGridCurve(points,color,opacity){const geo=new THREE.BufferGeometry
 for(let k=0;k<10;k++){
   const fixed=k/10*Math.PI*2,uCurve=[],vCurve=[];
   for(let s=0;s<=180;s++){const t=s/180*Math.PI*2;uCurve.push(project(torusPoint(t,fixed)));vCurve.push(project(torusPoint(fixed,t)))}
-  torusGridCurve(uCurve,0xffb08d,.62);torusGridCurve(vCurve,0xffd5c5,.48);
+  torusGridCurve(uCurve,0x123f98,.66);torusGridCurve(vCurve,0x5641b5,.54);
 }
-scene.add(new THREE.HemisphereLight(0xbbeeff,0x18100d,1.25));const keyLight=new THREE.DirectionalLight(0xffb08d,2.3);keyLight.position.set(4,7,5);scene.add(keyLight);
+scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new THREE.DirectionalLight(0xffffff,2.15);keyLight.position.set(4,7,5);scene.add(keyLight);
 
 const facePositions=[],faceColors=[];
-boundaryFaces.forEach((face,i)=>{const col=new THREE.Color().setHSL(.035+(i%10)*.006,.92,.56);for(const id of face.ids){const p=project(poly.v[id]);facePositions.push(p.x,p.y,p.z);faceColors.push(col.r,col.g,col.b)}});
+boundaryFaces.forEach((face,i)=>{const col=new THREE.Color().setHSL(.59+(i%10)*.006,.76,.48);for(const id of face.ids){const p=project(poly.v[id]);facePositions.push(p.x,p.y,p.z);faceColors.push(col.r,col.g,col.b)}});
 const faceGeo=new THREE.BufferGeometry();faceGeo.setAttribute('position',new THREE.Float32BufferAttribute(facePositions,3));faceGeo.setAttribute('color',new THREE.Float32BufferAttribute(faceColors,3));
 const faceMat=new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:.56,side:THREE.DoubleSide,depthWrite:false});groups.boundary.add(new THREE.Mesh(faceGeo,faceMat));
 const cellEdgeSet=new Set(),cellPairs=[];
 for(const ci of boundaryCells){const c=poly.cells[ci];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!cellEdgeSet.has(key)){cellEdgeSet.add(key);cellPairs.push([c[i],c[j]])}}}
-groups.boundary.add(lineSegments(cellPairs,0xff8b5e,.8));
+groups.boundary.add(lineSegments(cellPairs,0x194fb7,.82));
 
 function addCurve(points,color,opacity=.82){const geo=new THREE.BufferGeometry().setFromPoints(points),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity});groups.hopf.add(new THREE.Line(geo,mat))}
-const palette=[0x5ce1e6,0x74b9ff,0xcf8cff,0x68f0b0];
+const palette=[0x007c91,0x3559c7,0x7c3aed,0x008b68];
 for(let lat=0;lat<4;lat++){const eta=.18+(lat+.5)/4*1.20;for(let k=0;k<5;k++){const alpha=k/5*Math.PI*2+lat*.23,beta=-k/5*Math.PI*2*.62+lat*.71,pts=[];for(let s=0;s<=180;s++){const t=s/180*Math.PI*2,q=[Math.cos(eta)*Math.cos(alpha+t),Math.cos(eta)*Math.sin(alpha+t),Math.sin(eta)*Math.cos(beta+t),Math.sin(eta)*Math.sin(beta+t)],p=project(q);if(p.length()<42)pts.push(p)}addCurve(pts,palette[lat],.76)}}
 
 groups.extremes.visible=true;groups.hopf.visible=false;groups.cell.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;

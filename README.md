@@ -6,6 +6,8 @@ An interactive stereographic projection of the 3-sphere, with toggles for:
 - linked circles from the Hopf fibration;
 - the 600-cell, reconstructed as 120 vertices, 720 edges, and 600 tetrahedra;
 - the 100 tetrahedra adjacent to a 100-triangle toroidal boundary.
+- the dual 120-cell, reconstructed as 600 vertices and 1,200 edges;
+- its two 60-dodecahedron solid tori meeting across 200 pentagonal faces.
 
 The site is plain HTML, CSS, and JavaScript. Serve the directory locally with any static server, or open the published GitHub Pages URL.
 

@@ -39,6 +39,7 @@
           <span><i class="torus-dot"></i>TORUS</span>
           <span><i class="fiber-dot"></i>HOPF FIBER</span>
           <span><i class="cell-dot"></i>600-CELL</span>
+          <span><i class="dual-dot"></i>120-CELL</span>
         </div>
       </div>
 
@@ -56,9 +57,17 @@
           <span><b>600-cell</b><small>720 projected edges</small></span>
           <input id="toggle-cell" type="checkbox"><i></i>
         </label>
+        <label class="toggle-row">
+          <span><b>120-cell</b><small>600 vertices · 1,200 edges</small></span>
+          <input id="toggle-cell120" type="checkbox"><i></i>
+        </label>
         <label class="toggle-row accent">
           <span><b>100 boundary cells</b><small>The toroidal 10 × 10 atlas</small></span>
           <input id="toggle-boundary" type="checkbox"><i></i>
+        </label>
+        <label class="toggle-row dual-accent">
+          <span><b>120-cell seam</b><small>200 pentagonal faces</small></span>
+          <input id="toggle-seam120" type="checkbox"><i></i>
         </label>
         <div class="control-foot">
           <label for="opacity">TORUS OPACITY <output id="opacity-value">26%</output></label>
@@ -80,6 +89,7 @@
         <h2>Why exactly <em>100?</em></h2>
         <p>Start with one regular decagon running along a great circle of the 600-cell. The tetrahedra touching its ten vertices form a solid torus of <strong>150 cells</strong>. Its boundary is a torus tiled by <strong>100 triangles</strong>—each triangle belongs to one of <strong>100 boundary tetrahedra</strong>.</p>
         <p>This is the clean version of the claim: the torus is the boundary between two regions, not a generic smooth slice through only 100 tetrahedra. The smooth surface shown above passes through the same 50 boundary vertices; the faceted layer shows the actual 600-cell seam.</p>
+        <p><strong>For the dual 120-cell, the count changes.</strong> The decomposition becomes two linked solid tori of <strong>60 dodecahedra</strong> each. Their common boundary is a bumpy torus made from <strong>200 regular pentagons</strong>. Turn on “120-cell seam” to see those pentagonal cycles projected into ℝ³.</p>
       </div>
       <div class="atlas-card" id="atlas-card">
         <div class="atlas-head">
@@ -99,7 +109,7 @@
 
     <footer>
       <p>Built as a geometric explainer. The model generates the 600-cell from coordinates and reconstructs all 600 tetrahedra from edge cliques.</p>
-      <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">DON DAVIS’ CONSTRUCTION</a></p>
+      <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
   <script type="module" src="./app.js"></script>

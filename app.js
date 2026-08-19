@@ -15,7 +15,7 @@ stage.append(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=.055;controls.minDistance=4;controls.maxDistance=32;
 
-const groups={torus:new THREE.Group(),hopf:new THREE.Group(),cell:new THREE.Group(),boundary:new THREE.Group()};
+const groups={torus:new THREE.Group(),hopf:new THREE.Group(),cell:new THREE.Group(),cell120:new THREE.Group(),boundary:new THREE.Group(),seam120:new THREE.Group()};
 Object.values(groups).forEach(g=>scene.add(g));
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const norm=a=>Math.sqrt(dot(a,a));
@@ -63,6 +63,29 @@ projectionAxes=[basisU.map((x,i)=>-Math.sin(.17)*x+Math.cos(.17)*basisV[i]),basi
 groups.cell.add(lineSegments(poly.edges,0xf3c75b,.28));
 const vertexGeo=new THREE.SphereGeometry(.035,7,7),vertexMat=new THREE.MeshBasicMaterial({color:0xffd971,transparent:true,opacity:.8});
 for(const q of poly.v){const p=project(q);if(p.length()<42){const m=new THREE.Mesh(vertexGeo,vertexMat);m.position.copy(p);groups.cell.add(m)}}
+
+// Construct the dual 120-cell from the 600 tetrahedron centers. Two dual
+// vertices share an edge exactly when the corresponding tetrahedra share a face.
+const dualVertices=poly.cells.map(c=>normalize([0,1,2,3].map(k=>c.reduce((sum,id)=>sum+poly.v[id][k],0))));
+const dualFaceMap=new Map();
+poly.cells.forEach((c,ci)=>{for(let k=0;k<4;k++){const key=c.filter((_,j)=>j!==k).sort((x,y)=>x-y).join(',');if(!dualFaceMap.has(key))dualFaceMap.set(key,[]);dualFaceMap.get(key).push(ci)}});
+const dualEdges=[...dualFaceMap.values()].filter(x=>x.length===2).map(x=>[x[0],x[1]]);
+function projectedSegments(vertices,pairs,color,opacity){const pts=[];for(const[a,b]of pairs){const pa=project(vertices[a]),pb=project(vertices[b]);if(pa.length()<42&&pb.length()<42)pts.push(pa,pb)}return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}))}
+groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.34));
+const dualPointGeo=new THREE.SphereGeometry(.022,5,5),dualPointMat=new THREE.MeshBasicMaterial({color:0xb8aaff,transparent:true,opacity:.68});
+for(const q of dualVertices){const p=project(q);if(p.length()<42){const m=new THREE.Mesh(dualPointGeo,dualPointMat);m.position.copy(p);groups.cell120.add(m)}}
+
+// The 60 vertices belonging to the decagonal solid torus select 60 dual
+// dodecahedra. A primal edge crossing that partition is dual to one pentagonal
+// face in the common torus boundary.
+const solidVertexSet=new Set(solid.flatMap(({c})=>c));
+const crossingEdges=poly.edges.filter(([x,y])=>solidVertexSet.has(x)!==solidVertexSet.has(y));
+const primalEdgeCells=new Map();
+poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
+function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
+const seamPairs=[];
+for(const edge of crossingEdges){const ids=primalEdgeCells.get([...edge].sort((x,y)=>x-y).join(',')),cycle=orderPentagon(ids);if(cycle.length===5)for(let i=0;i<5;i++)seamPairs.push([cycle[i],cycle[(i+1)%5]])}
+groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
 const torusR=Math.sqrt((5+Math.sqrt(5))/10),torusr=Math.sqrt(1-torusR*torusR);
 function torusPoint(u,v){return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
 const NU=80,NV=42,positions=[],indices=[];
@@ -91,10 +114,11 @@ function addCurve(points,color,opacity=.82){const geo=new THREE.BufferGeometry()
 const palette=[0x5ce1e6,0x74b9ff,0xcf8cff,0x68f0b0];
 for(let lat=0;lat<4;lat++){const eta=.18+(lat+.5)/4*1.20;for(let k=0;k<5;k++){const alpha=k/5*Math.PI*2+lat*.23,beta=-k/5*Math.PI*2*.62+lat*.71,pts=[];for(let s=0;s<=180;s++){const t=s/180*Math.PI*2,q=[Math.cos(eta)*Math.cos(alpha+t),Math.cos(eta)*Math.sin(alpha+t),Math.sin(eta)*Math.cos(beta+t),Math.sin(eta)*Math.sin(beta+t)],p=project(q);if(p.length()<42)pts.push(p)}addCurve(pts,palette[lat],.76)}}
 
-groups.hopf.visible=false;groups.cell.visible=false;groups.boundary.visible=false;
-const toggles={torus:document.querySelector('#toggle-torus'),hopf:document.querySelector('#toggle-hopf'),cell:document.querySelector('#toggle-cell'),boundary:document.querySelector('#toggle-boundary')};
+groups.hopf.visible=false;groups.cell.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
+const toggles={torus:document.querySelector('#toggle-torus'),hopf:document.querySelector('#toggle-hopf'),cell:document.querySelector('#toggle-cell'),cell120:document.querySelector('#toggle-cell120'),boundary:document.querySelector('#toggle-boundary'),seam120:document.querySelector('#toggle-seam120')};
 const modeLabel=document.querySelector('#mode-label');
-function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.boundary.checked)active.push('100-CELL SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked)}
+const numberEls=[...document.querySelectorAll('.numbers div')];
+function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.cell120.checked)active.push('120-CELL');if(toggles.boundary.checked)active.push('100-TET SEAM');if(toggles.seam120.checked)active.push('200-PENTAGON SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked);const stats=toggles.cell120.checked&&!toggles.cell.checked?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]})}
 Object.values(toggles).forEach(x=>x.addEventListener('change',updateLayers));
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMat.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});
 
@@ -102,5 +126,5 @@ const atlas=document.querySelector('#atlas-grid');
 for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');if(!toggles.boundary.checked){toggles.boundary.checked=true;updateLayers()}});atlas.append(el)}
 
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}new ResizeObserver(resize).observe(stage);resize();
-let time=0;function animate(){requestAnimationFrame(animate);time+=.002;if(!controls.dragging){groups.hopf.rotation.y=time*.08;groups.cell.rotation.y=time*.025;groups.boundary.rotation.y=time*.025}controls.update();renderer.render(scene,camera)}animate();
-console.info(`600-cell check: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra; solid torus: ${solid.length} cells; boundary: ${boundaryFaces.length} triangles / ${boundaryCells.length} tetrahedra.`);
+let time=0;function animate(){requestAnimationFrame(animate);time+=.002;if(!controls.dragging){groups.hopf.rotation.y=time*.08;groups.cell.rotation.y=time*.025;groups.boundary.rotation.y=time*.025;groups.cell120.rotation.y=time*.025;groups.seam120.rotation.y=time*.025}controls.update();renderer.render(scene,camera)}animate();
+console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges. Torus seams: ${boundaryFaces.length} triangles / ${boundaryCells.length} tetrahedra; ${solidVertexSet.size}+${poly.v.length-solidVertexSet.size} dual cells / ${crossingEdges.length} pentagons.`);

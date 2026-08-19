@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d14">
+  <meta name="description" content="An interactive stereographic projection of S³ with its Hopf fibration, Clifford torus, and 600-cell decomposition.">
+  <title>S³ Atlas — Hopf fibers, Clifford torus & the 600-cell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <a class="brand" href="#top" aria-label="S3 Atlas home"><span>S³</span> ATLAS</a>
+      <p>ONE POINT AT INFINITY · EVERYTHING ELSE IN ℝ³</p>
+    </header>
+
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow">AN INTERACTIVE FIELD GUIDE</p>
+        <h1>A 3-sphere,<br><em>opened up.</em></h1>
+        <p class="lede">Stereographic projection turns the unit sphere in four dimensions into a scene you can orbit in three. Switch on its linked circles, its separating torus, and all 600 tetrahedral cells.</p>
+      </div>
+
+      <div class="stage-wrap">
+        <div id="stage" aria-label="Interactive stereographic projection of the 3-sphere"></div>
+        <div class="stage-topline">
+          <span id="mode-label">SEPARATING TORUS</span>
+          <span class="live"><i></i> LIVE PROJECTION</span>
+        </div>
+        <div class="stage-help">DRAG TO ORBIT · SCROLL TO ZOOM</div>
+        <div class="legend" aria-hidden="true">
+          <span><i class="torus-dot"></i>TORUS</span>
+          <span><i class="fiber-dot"></i>HOPF FIBER</span>
+          <span><i class="cell-dot"></i>600-CELL</span>
+        </div>
+      </div>
+
+      <aside class="controls" aria-label="Visualization layers">
+        <p class="panel-kicker">LAYERS</p>
+        <label class="toggle-row">
+          <span><b>Separating torus</b><small>Clifford torus + 10 × 10 grid</small></span>
+          <input id="toggle-torus" type="checkbox" checked><i></i>
+        </label>
+        <label class="toggle-row">
+          <span><b>Hopf fibration</b><small>Linked circle fibers</small></span>
+          <input id="toggle-hopf" type="checkbox"><i></i>
+        </label>
+        <label class="toggle-row">
+          <span><b>600-cell</b><small>720 projected edges</small></span>
+          <input id="toggle-cell" type="checkbox"><i></i>
+        </label>
+        <label class="toggle-row accent">
+          <span><b>100 boundary cells</b><small>The toroidal 10 × 10 atlas</small></span>
+          <input id="toggle-boundary" type="checkbox"><i></i>
+        </label>
+        <div class="control-foot">
+          <label for="opacity">TORUS OPACITY <output id="opacity-value">26%</output></label>
+          <input id="opacity" type="range" min="5" max="65" value="26">
+        </div>
+      </aside>
+    </section>
+
+    <section class="numbers" aria-label="600-cell counts">
+      <div><strong>120</strong><span>VERTICES</span></div>
+      <div><strong>720</strong><span>EDGES</span></div>
+      <div><strong>1,200</strong><span>TRIANGLES</span></div>
+      <div><strong>600</strong><span>TETRAHEDRA</span></div>
+    </section>
+
+    <section class="explain">
+      <div class="section-copy">
+        <p class="eyebrow">THE SEAM IN S³</p>
+        <h2>Why exactly <em>100?</em></h2>
+        <p>Start with one regular decagon running along a great circle of the 600-cell. The tetrahedra touching its ten vertices form a solid torus of <strong>150 cells</strong>. Its boundary is a torus tiled by <strong>100 triangles</strong>—each triangle belongs to one of <strong>100 boundary tetrahedra</strong>.</p>
+        <p>This is the clean version of the claim: the torus is the boundary between two regions, not a generic smooth slice through only 100 tetrahedra. The smooth surface shown above passes through the same 50 boundary vertices; the faceted layer shows the actual 600-cell seam.</p>
+      </div>
+      <div class="atlas-card" id="atlas-card">
+        <div class="atlas-head">
+          <span>TORUS ATLAS / CUT OPEN</span>
+          <span>OPPOSITE EDGES IDENTIFY ↔</span>
+        </div>
+        <div id="atlas-grid" class="atlas-grid" role="img" aria-label="A ten by ten atlas of the 100 boundary tetrahedra"></div>
+        <div class="atlas-axis"><span>← WRAPS AROUND THE DECAGON →</span><span>↕ WRAPS THROUGH THE HOLE ↕</span></div>
+      </div>
+    </section>
+
+    <section class="steps">
+      <article><span>01</span><h3>Stereographic projection</h3><p>A point <i>(x, y, z, w)</i> on S³ maps to <i>(x, y, z)/(1 − w)</i>. One pole escapes to infinity; circles remain circles or become lines.</p></article>
+      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. After projection, any two distinct fibers are linked—even when the perspective makes them appear to pass apart.</p></article>
+      <article><span>03</span><h3>The 600-cell</h3><p>Its tetrahedra are regular in ℝ⁴. Projection preserves incidence and angles locally, but not lengths, so they stretch dramatically in ℝ³.</p></article>
+    </section>
+
+    <footer>
+      <p>Built as a geometric explainer. The model generates the 600-cell from coordinates and reconstructs all 600 tetrahedra from edge cliques.</p>
+      <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">DON DAVIS’ CONSTRUCTION</a></p>
+    </footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -365,6 +365,21 @@ function walkCellFaces(mode,id){
 function walkFaces(){
   return walkCellFaces(visualMode,visualMode==='cell120'?walkCell120:walkCell600);
 }
+function portalPatternGeometry(vertices,face,mode){
+  const positions=[];
+  if(mode!=='cell120'){
+    const corners=face.map(id=>vertices[id]),center=normalize([0,1,2,3].map(k=>corners.reduce((sum,q)=>sum+q[k],0)));
+    // The center and three edge midpoints make six congruent sectors. One
+    // sector from each pair is painted: exactly half the spherical face area.
+    for(let i=0;i<3;i++){const a=corners[i],b=corners[(i+1)%3],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,6)}
+  }else{
+    const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));
+    // Center-to-vertex and center-to-midpoint rays make ten sectors. Painting
+    // every other sector gives a symmetric checkerboard analogue on a pentagon.
+    for(let i=0;i<5;i++){const a=vertices[face[i]],b=vertices[face[(i+1)%5]],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,6)}
+  }
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo;
+}
 function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
   const faces=walkFaces(),currentId=visualMode==='cell120'?walkCell120:walkCell600,currentColor=walkCellColor(visualMode,currentId);
@@ -374,8 +389,9 @@ function rebuildWalkCell(includeContext=true){
     // crossing it; after crossing, the reverse portal is tinted with the old
     // cell's stable graph color. This avoids doubled coplanar transparent walls.
     const destinationColor=walkCellColor(visualMode,entry.neighbor);
-    const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],10),new THREE.MeshPhongMaterial({color:destinationColor,transparent:true,opacity:.06,side:THREE.DoubleSide,depthWrite:false,shininess:35}));
-    mesh.userData={portal:true,neighbor:entry.neighbor,face:index};mesh.renderOrder=2;groups.walk.add(mesh);
+    const pattern=new THREE.Mesh(portalPatternGeometry(entry.vertices,entry.face,visualMode),new THREE.MeshPhongMaterial({color:destinationColor,transparent:true,opacity:.2,side:THREE.DoubleSide,depthWrite:false,shininess:35}));pattern.renderOrder=2;
+    const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],8),new THREE.MeshBasicMaterial({transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,colorWrite:false}));
+    mesh.userData={portal:true,neighbor:entry.neighbor,face:index,visual:pattern};mesh.renderOrder=3;groups.walk.add(pattern,mesh);
     for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!seen.has(key)){seen.add(key);allPairs.push([a,b])}}
   });
   const vertices=faces[0]?.vertices||poly.v;
@@ -462,7 +478,7 @@ function portalAtEvent(event){const rect=renderer.domElement.getBoundingClientRe
 renderer.domElement.addEventListener('pointerdown',event=>{pointerDown.set(event.clientX,event.clientY);pointerLast.copy(pointerDown);insidePointer=walkView;renderer.domElement.setPointerCapture(event.pointerId)});
 renderer.domElement.addEventListener('pointermove',event=>{
   if(!walkView||walkAnimating)return;if(insidePointer){insideYaw-=(event.clientX-pointerLast.x)*.0045;insidePitch=Math.max(-1.48,Math.min(1.48,insidePitch+(event.clientY-pointerLast.y)*.0045));pointerLast.set(event.clientX,event.clientY);updateInsideCamera()}
-  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.06;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.2;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
+  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.userData.visual.material.opacity=.2;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.userData.visual.material.opacity=.42;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
 });
 renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
 

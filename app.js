@@ -349,7 +349,8 @@ groups.boundary.add(lineSegments(cellPairs,0x194fb7,.82));
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
 let walkView=false,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
-const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2(),pointerLast=new THREE.Vector2();
+const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
+const insideStartQuaternion=new THREE.Quaternion(),insideDeltaQuaternion=new THREE.Quaternion(),insideGrabDirection=new THREE.Vector3(),insideCandidateDirection=new THREE.Vector3();
 const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');
 function nearestCenter(centers,target){let best=0,score=-Infinity;for(let i=0;i<centers.length;i++){const s=dot(centers[i],target);if(s>score){score=s;best=i}}return best}
 const initialChartCenter=overviewPole.map(x=>-x);
@@ -475,12 +476,20 @@ function setWalkView(active,urlAction='push'){
 walkToggle.addEventListener('click',()=>setWalkView(!walkView));
 window.addEventListener('keydown',event=>{if(event.key==='Escape'&&walkView)setWalkView(false)});
 function portalAtEvent(event){const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.intersectObjects(groups.walk.children.filter(x=>x.userData.portal))[0]?.object||null}
-renderer.domElement.addEventListener('pointerdown',event=>{pointerDown.set(event.clientX,event.clientY);pointerLast.copy(pointerDown);insidePointer=walkView;renderer.domElement.setPointerCapture(event.pointerId)});
+function localRayAtEvent(event){
+  const rect=renderer.domElement.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width*2-1,y=-(event.clientY-rect.top)/rect.height*2+1,tanHalfFov=Math.tan(THREE.MathUtils.degToRad(camera.fov*.5));
+  return new THREE.Vector3(x*tanHalfFov*camera.aspect,y*tanHalfFov,-1).normalize();
+}
+renderer.domElement.addEventListener('pointerdown',event=>{
+  pointerDown.set(event.clientX,event.clientY);insidePointer=walkView;renderer.domElement.setPointerCapture(event.pointerId);
+  if(insidePointer){insideStartQuaternion.copy(camera.quaternion);insideGrabDirection.copy(localRayAtEvent(event)).applyQuaternion(insideStartQuaternion);renderer.domElement.style.cursor='grabbing'}
+});
 renderer.domElement.addEventListener('pointermove',event=>{
-  if(!walkView||walkAnimating)return;if(insidePointer){insideYaw-=(event.clientX-pointerLast.x)*.0045;insidePitch=Math.max(-1.48,Math.min(1.48,insidePitch+(event.clientY-pointerLast.y)*.0045));pointerLast.set(event.clientX,event.clientY);updateInsideCamera()}
+  if(!walkView||walkAnimating)return;if(insidePointer){insideCandidateDirection.copy(localRayAtEvent(event)).applyQuaternion(insideStartQuaternion);insideDeltaQuaternion.setFromUnitVectors(insideCandidateDirection,insideGrabDirection);camera.quaternion.copy(insideDeltaQuaternion).multiply(insideStartQuaternion);camera.position.set(0,0,0);camera.updateMatrixWorld()}
   const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.userData.visual.material.opacity=.2;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.userData.visual.material.opacity=.42;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
 });
-renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
+renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.style.cursor=hoveredPortal?'pointer':'grab';renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
+renderer.domElement.addEventListener('pointercancel',event=>{insidePointer=false;if(renderer.domElement.hasPointerCapture(event.pointerId))renderer.domElement.releasePointerCapture(event.pointerId);renderer.domElement.style.cursor=walkView?'grab':''});
 
 groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=false;groups.intersections.visible=false;groups.cell120.visible=false;groups.boundary.visible=false;groups.seam120.visible=false;
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
@@ -526,6 +535,6 @@ const morph=document.querySelector('#morph'),morphValue=document.querySelector('
 const atlas=document.querySelector('#atlas-grid');
 for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');selectMode('cell600','push')});atlas.append(el)}
 
-function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView)updateInsideCamera();else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}}new ResizeObserver(resize).observe(stage);resize();
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView){camera.position.set(0,0,0);camera.updateMatrixWorld()}else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}}new ResizeObserver(resize).observe(stage);resize();
 function animate(){requestAnimationFrame(animate);if(!walkView)controls.update();renderer.render(scene,camera)}animate();
 console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges. Torus seams: ${boundaryFaces.length} triangles / ${boundaryCells.length} tetrahedra; ${solidVertexSet.size}+${poly.v.length-solidVertexSet.size} dual cells / ${crossingEdges.length} pentagons.`);

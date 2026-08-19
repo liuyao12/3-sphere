@@ -374,7 +374,7 @@ function rebuildWalkCell(includeContext=true){
     // crossing it; after crossing, the reverse portal is tinted with the old
     // cell's stable graph color. This avoids doubled coplanar transparent walls.
     const destinationColor=walkCellColor(visualMode,entry.neighbor);
-    const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],10),new THREE.MeshPhongMaterial({color:destinationColor,transparent:true,opacity:.14,side:THREE.DoubleSide,depthWrite:false,shininess:35}));
+    const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],10),new THREE.MeshPhongMaterial({color:destinationColor,transparent:true,opacity:.06,side:THREE.DoubleSide,depthWrite:false,shininess:35}));
     mesh.userData={portal:true,neighbor:entry.neighbor,face:index};mesh.renderOrder=2;groups.walk.add(mesh);
     for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!seen.has(key)){seen.add(key);allPairs.push([a,b])}}
   });
@@ -385,17 +385,21 @@ function rebuildWalkCell(includeContext=true){
   // Neighbor shells remain visible through the current transparent walls.
   // Immediate neighbors get faint surfaces; graph-distance-two cells are only
   // edge traces, so the complex recedes without becoming an opaque thicket.
-  const immediate=walkNeighbors(visualMode,currentId),nearSet=new Set([currentId,...immediate]),faceBuckets=new Map(),seenFaces=new Set();
-  for(const cellId of immediate)for(const entry of walkCellFaces(visualMode,cellId)){
-    if(entry.neighbor===currentId)continue;
-    const key=[...entry.face].sort((a,b)=>a-b).join(',');if(seenFaces.has(key))continue;seenFaces.add(key);
-    const color=walkCellColor(visualMode,cellId);if(!faceBuckets.has(color))faceBuckets.set(color,[]);faceBuckets.get(color).push(entry.face);
+  const immediate=walkNeighbors(visualMode,currentId),nearSet=new Set([currentId,...immediate]),faceBuckets=new Map(),nearEdgeBuckets=new Map(),seenFaces=new Set();
+  for(const cellId of immediate){
+    const color=walkCellColor(visualMode,cellId);if(!nearEdgeBuckets.has(color))nearEdgeBuckets.set(color,{pairs:[],seen:new Set()});const edgeBucket=nearEdgeBuckets.get(color);
+    for(const entry of walkCellFaces(visualMode,cellId)){
+      for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],edgeKey=a<b?`${a},${b}`:`${b},${a}`;if(!edgeBucket.seen.has(edgeKey)){edgeBucket.seen.add(edgeKey);edgeBucket.pairs.push([a,b])}}
+      if(entry.neighbor===currentId)continue;
+      const key=[...entry.face].sort((a,b)=>a-b).join(',');if(seenFaces.has(key))continue;seenFaces.add(key);if(!faceBuckets.has(color))faceBuckets.set(color,[]);faceBuckets.get(color).push(entry.face);
+    }
   }
-  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(sphericalFaceGeometry(vertices,shellFaces,5),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.034,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
+  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(sphericalFaceGeometry(vertices,shellFaces,5),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.075,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
+  for(const[color,bucket]of nearEdgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.52);trace.renderOrder=1;groups.walk.add(trace)}
   const far=new Set();for(const cellId of immediate)for(const next of walkNeighbors(visualMode,cellId))if(!nearSet.has(next))far.add(next);
   const edgeBuckets=new Map();
   for(const cellId of far){const color=walkCellColor(visualMode,cellId);if(!edgeBuckets.has(color))edgeBuckets.set(color,{pairs:[],seen:new Set()});const bucket=edgeBuckets.get(color);for(const entry of walkCellFaces(visualMode,cellId))for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!bucket.seen.has(key)){bucket.seen.add(key);bucket.pairs.push([a,b])}}}
-  for(const[color,bucket]of edgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.09);trace.renderOrder=-1;groups.walk.add(trace)}
+  for(const[color,bucket]of edgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.2);trace.renderOrder=-1;groups.walk.add(trace)}
 }
 function rotateFromTo(v,a,b){
   const c=Math.max(-1,Math.min(1,dot(a,b)));if(c>.999999)return [...v];
@@ -458,7 +462,7 @@ function portalAtEvent(event){const rect=renderer.domElement.getBoundingClientRe
 renderer.domElement.addEventListener('pointerdown',event=>{pointerDown.set(event.clientX,event.clientY);pointerLast.copy(pointerDown);insidePointer=walkView;renderer.domElement.setPointerCapture(event.pointerId)});
 renderer.domElement.addEventListener('pointermove',event=>{
   if(!walkView||walkAnimating)return;if(insidePointer){insideYaw-=(event.clientX-pointerLast.x)*.0045;insidePitch=Math.max(-1.48,Math.min(1.48,insidePitch+(event.clientY-pointerLast.y)*.0045));pointerLast.set(event.clientX,event.clientY);updateInsideCamera()}
-  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.14;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.36;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
+  const hit=portalAtEvent(event);if(hit===hoveredPortal)return;if(hoveredPortal)hoveredPortal.material.opacity=.06;hoveredPortal=hit;if(hoveredPortal)hoveredPortal.material.opacity=.2;renderer.domElement.style.cursor=insidePointer?'grabbing':hoveredPortal?'pointer':'grab';
 });
 renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
 

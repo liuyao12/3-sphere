@@ -6,7 +6,7 @@ const stage=document.querySelector('#stage');
 const scene=new THREE.Scene();
 scene.fog=new THREE.FogExp2(0x080d14,.025);
 const camera=new THREE.PerspectiveCamera(38,1,.05,160);
-camera.position.set(8.2,5.6,9.4);
+camera.position.set(7.4,13,8.8);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setClearColor(0x000000,0);
@@ -22,7 +22,7 @@ const norm=a=>Math.sqrt(dot(a,a));
 const normalize=a=>{const n=norm(a);return a.map(x=>x/n)};
 const d2=(a,b)=>a.reduce((s,x,i)=>s+(x-b[i])**2,0);
 let projectionPole,projectionAxes;
-function project(q){const den=Math.max(.04,1-dot(q,projectionPole));return new THREE.Vector3(...projectionAxes.map(axis=>dot(q,axis)/den)).multiplyScalar(1.05)}
+function project(q){const den=Math.max(.04,1-dot(q,projectionPole)),c=projectionAxes.map(axis=>dot(q,axis)/den);return new THREE.Vector3(c[1],c[0],c[2]).multiplyScalar(1.05)}
 
 function permutations(a){const out=[];function go(k){if(k===a.length){out.push([...a]);return}for(let i=k;i<a.length;i++){[a[k],a[i]]=[a[i],a[k]];go(k+1);[a[k],a[i]]=[a[i],a[k]]}}go(0);return out}
 function parity(p){let n=0;for(let i=0;i<4;i++)for(let j=i+1;j<4;j++)n+=p[i]>p[j];return n%2}
@@ -88,12 +88,12 @@ for(const edge of crossingEdges){const ids=primalEdgeCells.get([...edge].sort((x
 groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
 const torusR=Math.sqrt((5+Math.sqrt(5))/10),torusr=Math.sqrt(1-torusR*torusR);
 function torusPoint(u,v){return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
-const NU=80,NV=42,positions=[],indices=[];
-for(let i=0;i<=NU;i++)for(let j=0;j<=NV;j++){const p=project(torusPoint(i/NU*Math.PI*2,j/NV*Math.PI*2));positions.push(p.x,p.y,p.z)}
-for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){const k=i*(NV+1)+j,kn=(i+1)*(NV+1)+j;indices.push(k,kn,k+1,kn,kn+1,k+1)}
-const torusGeo=new THREE.BufferGeometry();torusGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));torusGeo.setIndex(indices);torusGeo.computeVertexNormals();
-const torusMat=new THREE.MeshPhongMaterial({color:0xff6338,emissive:0x311006,transparent:true,opacity:.26,side:THREE.DoubleSide,depthWrite:false,shininess:55});
-groups.torus.add(new THREE.Mesh(torusGeo,torusMat));
+const torusMaterials=[
+  new THREE.MeshPhongMaterial({color:0xff6338,emissive:0x311006,transparent:true,opacity:.07,side:THREE.DoubleSide,depthWrite:true,shininess:55}),
+  new THREE.MeshPhongMaterial({color:0xff7047,emissive:0x3d1409,transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:true,shininess:55})
+];
+function torusTileGeometry(tileU,tileV){const SU=8,SV=5,positions=[],indices=[];for(let i=0;i<=SU;i++)for(let j=0;j<=SV;j++){const u=(tileU+i/SU)/10*Math.PI*2,v=(tileV+j/SV)/10*Math.PI*2,p=project(torusPoint(u,v));positions.push(p.x,p.y,p.z)}for(let i=0;i<SU;i++)for(let j=0;j<SV;j++){const k=i*(SV+1)+j,kn=(i+1)*(SV+1)+j;indices.push(k,kn,k+1,kn,kn+1,k+1)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();return geo}
+for(let i=0;i<10;i++)for(let j=0;j<10;j++)groups.torus.add(new THREE.Mesh(torusTileGeometry(i,j),torusMaterials[(i+j)%2]));
 function torusGridCurve(points,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(points),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});groups.torus.add(new THREE.Line(geo,mat))}
 for(let k=0;k<10;k++){
   const fixed=k/10*Math.PI*2,uCurve=[],vCurve=[];
@@ -120,7 +120,7 @@ const modeLabel=document.querySelector('#mode-label');
 const numberEls=[...document.querySelectorAll('.numbers div')];
 function updateLayers(){for(const[k,input]of Object.entries(toggles))groups[k].visible=input.checked;const active=[];if(toggles.hopf.checked)active.push('HOPF FIBERS');if(toggles.cell.checked)active.push('600-CELL');if(toggles.cell120.checked)active.push('120-CELL');if(toggles.boundary.checked)active.push('100-TET SEAM');if(toggles.seam120.checked)active.push('200-PENTAGON SEAM');modeLabel.textContent=active.join(' + ')||'SEPARATING TORUS';document.querySelector('#atlas-card').classList.toggle('lit',toggles.boundary.checked);const stats=toggles.cell120.checked&&!toggles.cell.checked?[[600,'VERTICES'],['1,200','EDGES'],[720,'PENTAGONS'],[120,'DODECAHEDRA']]:[[120,'VERTICES'],[720,'EDGES'],['1,200','TRIANGLES'],[600,'TETRAHEDRA']];numberEls.forEach((el,i)=>{el.querySelector('strong').textContent=stats[i][0];el.querySelector('span').textContent=stats[i][1]})}
 Object.values(toggles).forEach(x=>x.addEventListener('change',updateLayers));
-const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMat.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});
+const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{const value=+opacity.value/100;torusMaterials[0].opacity=value*.25;torusMaterials[1].opacity=Math.min(.9,value*1.9);opacityValue.value=`${opacity.value}%`});
 
 const atlas=document.querySelector('#atlas-grid');
 for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');if(!toggles.boundary.checked){toggles.boundary.checked=true;updateLayers()}});atlas.append(el)}

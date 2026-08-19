@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=masthead-title">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -17,17 +17,14 @@
 <body>
   <main class="shell">
     <header class="masthead">
-      <a class="brand" href="#top" aria-label="S3 Atlas home"><span>S³</span> ATLAS</a>
+      <div class="masthead-identity">
+        <a class="brand" href="#top" aria-label="S3 Atlas home"><span>S³</span> ATLAS</a>
+        <h1 class="masthead-title">The 3-sphere, <em>opened up</em></h1>
+      </div>
       <p>ONE POINT AT INFINITY · EVERYTHING ELSE IN ℝ³</p>
     </header>
 
     <section class="hero" id="top">
-      <div class="hero-copy">
-        <p class="eyebrow">AN INTERACTIVE FIELD GUIDE</p>
-        <h1>The 3-sphere, <em>opened up</em></h1>
-        <p class="lede">Stereographic projection turns the unit sphere in four dimensions into a scene you can orbit in three. Switch on its linked circles, its separating torus, and all 600 tetrahedral cells.</p>
-      </div>
-
       <div class="stage-wrap">
         <div id="stage" aria-label="Interactive stereographic projection of the 3-sphere"></div>
         <div class="stage-topline">

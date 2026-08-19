@@ -38,3 +38,5 @@ html,body{overflow-x:hidden}
 /* Compact masthead title. */
 .masthead-identity{display:flex;align-items:center;gap:30px;min-width:0}.masthead-title{margin:0;padding-left:30px;border-left:1px solid rgba(55,76,102,.2);font:600 clamp(20px,2.15vw,31px)/1 var(--sans);letter-spacing:-.045em;color:var(--ink);white-space:nowrap}.masthead-title em{color:#245bd6;font-weight:500}.hero-copy{display:none}.stage-topline{top:106px}
 @media(max-width:700px){.masthead-identity{gap:14px}.masthead-title{padding-left:14px;font-size:clamp(15px,4.5vw,19px)}.brand{gap:8px;font-size:9px}.brand span{width:32px;height:32px;font-size:15px}.stage-topline{top:86px}}
+
+.stage-wrap:before{display:none}

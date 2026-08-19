@@ -42,7 +42,13 @@ function make600(){
 }
 
 const poly=make600();
-function lineSegments(pairs,color,opacity){const pts=[];for(const[a,b]of pairs){const pa=project(poly.v[a]),pb=project(poly.v[b]);if(pa.length()<42&&pb.length()<42)pts.push(pa,pb)}const geo=new THREE.BufferGeometry().setFromPoints(pts),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});return new THREE.LineSegments(geo,mat)}
+function slerp(a,b,t){const d=Math.max(-1,Math.min(1,dot(a,b))),angle=Math.acos(d);if(angle<1e-7)return normalize(a.map((x,i)=>(1-t)*x+t*b[i]));const s=Math.sin(angle);return a.map((x,i)=>(Math.sin((1-t)*angle)*x+Math.sin(t*angle)*b[i])/s)}
+function sphericalSegmentPoints(vertices,pairs,steps=20){const pts=[];for(const[a,b]of pairs)for(let k=0;k<steps;k++){const pa=project(slerp(vertices[a],vertices[b],k/steps)),pb=project(slerp(vertices[a],vertices[b],(k+1)/steps));if(pa.length()<42&&pb.length()<42)pts.push(pa,pb)}return pts}
+function lineSegments(pairs,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(poly.v,pairs)),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});return new THREE.LineSegments(geo,mat)}
+function sphericalPoint(a,b,c,wa,wb,wc){return normalize(a.map((x,i)=>wa*x+wb*b[i]+wc*c[i]))}
+function appendSphericalTriangle(positions,a,b,c,subdivisions=3){const point=(i,j)=>project(sphericalPoint(a,b,c,1-(i+j)/subdivisions,i/subdivisions,j/subdivisions));for(let i=0;i<subdivisions;i++)for(let j=0;j<subdivisions-i;j++){const p0=point(i,j),p1=point(i+1,j),p2=point(i,j+1);if(Math.max(p0.length(),p1.length(),p2.length())<42)for(const p of[p0,p1,p2])positions.push(p.x,p.y,p.z);if(j<subdivisions-i-1){const p3=point(i+1,j+1);if(Math.max(p1.length(),p3.length(),p2.length())<42)for(const p of[p1,p3,p2])positions.push(p.x,p.y,p.z)}}}
+function sphericalFaceGeometry(vertices,faces){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]])}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
+function sphericalFaces(vertices,faces,color,opacity){return new THREE.Mesh(sphericalFaceGeometry(vertices,faces),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
 
 // A decagonal great circle, its 150-cell solid torus, and the 100-face boundary.
 const a=0,b=[...poly.adjacency[a]][0],basisU=poly.v[a];
@@ -76,7 +82,9 @@ const dualVertices=poly.cells.map(c=>normalize([0,1,2,3].map(k=>c.reduce((sum,id
 const dualFaceMap=new Map();
 poly.cells.forEach((c,ci)=>{for(let k=0;k<4;k++){const key=c.filter((_,j)=>j!==k).sort((x,y)=>x-y).join(',');if(!dualFaceMap.has(key))dualFaceMap.set(key,[]);dualFaceMap.get(key).push(ci)}});
 const dualEdges=[...dualFaceMap.values()].filter(x=>x.length===2).map(x=>[x[0],x[1]]);
-function projectedSegments(vertices,pairs,color,opacity){const pts=[];for(const[a,b]of pairs){const pa=project(vertices[a]),pb=project(vertices[b]);if(pa.length()<42&&pb.length()<42)pts.push(pa,pb)}return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}))}
+const cell600Faces=[...dualFaceMap.keys()].map(key=>key.split(',').map(Number));
+groups.cell.add(sphericalFaces(poly.v,cell600Faces,0xb47700,.022));
+function projectedSegments(vertices,pairs,color,opacity){return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(vertices,pairs)),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}))}
 groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.34));
 const dualPointGeo=new THREE.SphereGeometry(.022,5,5),dualPointMat=new THREE.MeshBasicMaterial({color:0xb8aaff,transparent:true,opacity:.68});
 for(const q of dualVertices){const p=project(q);if(p.length()<42){const m=new THREE.Mesh(dualPointGeo,dualPointMat);m.position.copy(p);groups.cell120.add(m)}}
@@ -89,6 +97,8 @@ const crossingEdges=poly.edges.filter(([x,y])=>solidVertexSet.has(x)!==solidVert
 const primalEdgeCells=new Map();
 poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
 function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
+const cell120Faces=[...primalEdgeCells.values()].map(orderPentagon).filter(face=>face.length===5);
+groups.cell120.add(sphericalFaces(dualVertices,cell120Faces,0x9f8cff,.018));
 const seamPairs=[];
 for(const edge of crossingEdges){const ids=primalEdgeCells.get([...edge].sort((x,y)=>x-y).join(',')),cycle=orderPentagon(ids);if(cycle.length===5)for(let i=0;i<5;i++)seamPairs.push([cycle[i],cycle[(i+1)%5]])}
 groups.seam120.add(projectedSegments(dualVertices,seamPairs,0xe58cff,.78));
@@ -111,8 +121,9 @@ for(let k=0;k<10;k++){
 const vertexRadials=poly.v.map(q=>dot(q,basisU)**2+dot(q,basisV)**2);
 const canonicalLevel=(5+Math.sqrt(5))/10;
 const intersectionLines=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6d28d9,transparent:true,opacity:.7,depthWrite:false}));
-groups.intersections.add(intersectionLines);
-function updateIntersectedCells(){const level=Math.cos(torusEta)**2,ids=Math.abs(level-canonicalLevel)<1e-7?[...boundaryCells]:[];if(!ids.length)for(let ci=0;ci<poly.cells.length;ci++){const values=poly.cells[ci].map(id=>vertexRadials[id]);if(Math.min(...values)<=level+1e-8&&Math.max(...values)>=level-1e-8)ids.push(ci)}const pts=[],seen=new Set();for(const ci of ids){const c=poly.cells[ci];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const a=c[i],b=c[j],key=a<b?`${a},${b}`:`${b},${a}`;if(seen.has(key))continue;seen.add(key);const p=project(poly.v[a]),q=project(poly.v[b]);if(p.length()<42&&q.length()<42)pts.push(p,q)}}intersectionLines.geometry.dispose();intersectionLines.geometry=new THREE.BufferGeometry().setFromPoints(pts);const count=document.querySelector('#intersection-count');if(count)count.value=ids.length}
+const intersectionWalls=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshPhongMaterial({color:0x6d28d9,transparent:true,opacity:.028,side:THREE.DoubleSide,depthWrite:false,shininess:18}));
+groups.intersections.add(intersectionWalls,intersectionLines);
+function updateIntersectedCells(){const level=Math.cos(torusEta)**2,ids=Math.abs(level-canonicalLevel)<1e-7?[...boundaryCells]:[];if(!ids.length)for(let ci=0;ci<poly.cells.length;ci++){const values=poly.cells[ci].map(id=>vertexRadials[id]);if(Math.min(...values)<=level+1e-8&&Math.max(...values)>=level-1e-8)ids.push(ci)}const pairs=[],seen=new Set(),faces=[],seenFaces=new Set();for(const ci of ids){const c=poly.cells[ci];for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const a=c[i],b=c[j],key=a<b?`${a},${b}`:`${b},${a}`;if(seen.has(key))continue;seen.add(key);pairs.push([a,b])}for(let k=0;k<4;k++){const face=c.filter((_,i)=>i!==k).sort((a,b)=>a-b),key=face.join(',');if(!seenFaces.has(key)){seenFaces.add(key);faces.push(face)}}}intersectionLines.geometry.dispose();intersectionLines.geometry=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(poly.v,pairs));intersectionWalls.geometry.dispose();intersectionWalls.geometry=sphericalFaceGeometry(poly.v,faces);const count=document.querySelector('#intersection-count');if(count)count.value=ids.length}
 function updateTorusGeometry(){for(const mesh of torusTiles){mesh.geometry.dispose();mesh.geometry=torusTileGeometry(mesh.userData.tileU,mesh.userData.tileV)}for(const item of torusGridLines){const pts=[];for(let s=0;s<=180;s++){const t=s/180*Math.PI*2;pts.push(project(item.kind==='u'?torusPoint(t,item.fixed):torusPoint(item.fixed,t)))}item.line.geometry.dispose();item.line.geometry=new THREE.BufferGeometry().setFromPoints(pts)}updateIntersectedCells()}
 scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new THREE.DirectionalLight(0xffffff,2.15);keyLight.position.set(4,7,5);scene.add(keyLight);
 

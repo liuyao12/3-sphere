@@ -76,7 +76,7 @@ const [basisN,basisM]=complement(basisU,basisV);
 const overviewCorePole=basisU.map((x,i)=>Math.cos(.17)*x+Math.sin(.17)*basisV[i]),overviewCoreTangent=basisU.map((x,i)=>-Math.sin(.17)*x+Math.cos(.17)*basisV[i]);
 projectionPole=[...overviewCorePole];projectionAxes=[[...overviewCoreTangent],[...basisN],[...basisM]];
 let overviewPole=[...projectionPole],overviewAxes=projectionAxes.map(axis=>[...axis]),overviewProjectionRevision=0;
-const extremeMaterial=new LineMaterial({color:0xe32645,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false}),extremeAxisMaterial=new LineMaterial({color:0xb81032,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false});
+const extremeMaterial=new LineMaterial({color:0xe32645,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false}),extremeAxisMaterial=new LineMaterial({color:0xa21caf,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false});
 const extremeCircleLine=new LineSegments2(new LineSegmentsGeometry(),extremeMaterial),extremeAxisLine=new LineSegments2(new LineSegmentsGeometry(),extremeAxisMaterial);
 groups.extremes.add(extremeCircleLine,extremeAxisLine);
 function wideSegmentGeometry(points){const positions=new Float32Array(points.length*3);points.forEach((point,index)=>{positions[index*3]=point.x;positions[index*3+1]=point.y;positions[index*3+2]=point.z});const geometry=new LineSegmentsGeometry();geometry.setPositions(positions);return geometry}

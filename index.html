@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=equal-area-walls">
+  <link rel="stylesheet" href="./style.css?v=movable-stereographic-pole">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -54,6 +54,11 @@
         <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2" aria-label="Morph torus from z-axis to equatorial circle">
         <span class="sr-only"><output id="morph-value">η 31.7°</output><output id="intersection-count">24</output><span id="intersection-label">CIRCLES IN TWO RULINGS</span></span>
       </div>
+      <div class="projection-dock" aria-label="Stereographic projection point control">
+        <label for="projection-point">STEREOGRAPHIC POLE <output id="projection-value">ON CORE A</output></label>
+        <input id="projection-point" type="range" min="0" max="100" step="0.1" value="0" aria-label="Move the stereographic pole off the first core circle">
+        <div><span>LINE + CIRCLE</span><span>HOPF LINK</span></div>
+      </div>
       <div class="hopf-base-control" id="hopf-base-control" aria-label="Hopf base sphere selector">
         <span>BASE S²</span>
         <svg id="hopf-base" viewBox="-1.12 -1.12 2.24 2.24" role="application" tabindex="0" aria-label="Drag the point over the visible hemisphere to select a Hopf fiber">
@@ -90,7 +95,7 @@
 
     <section class="steps">
       <article><span>01</span><h3>Stereographic projection</h3><p>A point <i>(x, y, z, w)</i> on S³ maps to <i>(x, y, z)/(1 − w)</i>. One pole escapes to infinity; circles remain circles or become lines.</p></article>
-      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. The two torus rulings shown above come from the standard and oppositely oriented Hopf fibrations. At the extremes, a circle through the projection pole opens into the z-axis.</p></article>
+      <article><span>02</span><h3>Hopf fibers</h3><p>S³ decomposes into circles. The two core circles of the complementary solid tori form a Hopf link. When the projection pole lies on one core, that circle opens into a line through infinity.</p></article>
       <article><span>03</span><h3>The 600-cell</h3><p>Its tetrahedra are regular in ℝ⁴. Projection preserves incidence and angles locally, but not lengths, so they stretch dramatically in ℝ³.</p></article>
     </section>
 
@@ -99,6 +104,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=opaque-two-sided-walls"></script>
+  <script type="module" src="./app.js?v=movable-stereographic-pole"></script>
 </body>
 </html>

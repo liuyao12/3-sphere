@@ -35,6 +35,10 @@ html,body{overflow-x:hidden}
 .morph-dock{right:22px;top:50%;width:28px;height:auto;padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;gap:0;transform:translateY(-42%)}.morph-dock>input{width:28px;height:300px;margin:0;filter:drop-shadow(0 2px 7px rgba(36,91,214,.2))}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 @media(max-width:700px){.morph-dock{right:8px;width:24px;padding:0;transform:translateY(-40%)}.morph-dock>input{width:24px;height:230px}}
 
+/* Move the missing point off one core so both cores appear as finite circles. */
+.projection-dock{position:absolute;z-index:4;left:50%;bottom:24px;transform:translateX(-50%);width:min(290px,38vw);padding:10px 13px 9px;background:rgba(255,255,255,.84);border:1px solid rgba(70,91,118,.2);box-shadow:0 10px 30px rgba(53,72,96,.11);backdrop-filter:blur(7px);transition:opacity .2s}.projection-dock label,.projection-dock>div{display:flex;justify-content:space-between;gap:12px;color:#52627a;font:500 8px var(--mono);letter-spacing:.09em}.projection-dock output{color:#245bd6}.projection-dock input{display:block;width:100%;margin:8px 0 6px;accent-color:#245bd6;cursor:ew-resize}body.walking .projection-dock{opacity:.25;pointer-events:none}
+@media(max-width:700px){.projection-dock{bottom:16px;width:min(230px,62vw);padding:8px 10px}.projection-dock label,.projection-dock>div{font-size:7px}}
+
 /* Compact masthead title. */
 .masthead-identity{display:flex;align-items:center;gap:30px;min-width:0}.masthead-title{margin:0;padding-left:30px;border-left:1px solid rgba(55,76,102,.2);font:600 clamp(20px,2.15vw,31px)/1 var(--sans);letter-spacing:-.045em;color:var(--ink);white-space:nowrap}.masthead-title em{color:#245bd6;font-weight:500}.hero-copy{display:none}.stage-topline{top:106px}
 @media(max-width:700px){.masthead-identity{gap:14px}.masthead-title{padding-left:14px;font-size:clamp(15px,4.5vw,19px)}.brand{gap:8px;font-size:9px}.brand span{width:32px;height:32px;font-size:15px}.stage-topline{top:86px}}

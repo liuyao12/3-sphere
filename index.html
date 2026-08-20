@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=full-core-sweep">
+  <link rel="stylesheet" href="./style.css?v=superimposed-hopf-base">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -63,9 +63,8 @@
         </div>
       </div>
       <div class="hopf-base-control" id="hopf-base-control" aria-label="Hopf base sphere selector">
-        <span>BASE S²</span>
         <svg id="hopf-base" viewBox="-1.12 -1.12 2.24 2.24" role="application" tabindex="0" aria-label="Drag the point over the visible hemisphere to select a Hopf fiber">
-          <defs><radialGradient id="base-dome" cx="34%" cy="28%" r="72%"><stop offset="0" stop-color="#ffffff" stop-opacity=".92"/><stop offset="1" stop-color="#9bb7ef" stop-opacity=".3"/></radialGradient></defs>
+          <defs><radialGradient id="base-dome" cx="34%" cy="28%" r="72%"><stop offset="0" stop-color="#ffffff" stop-opacity=".26"/><stop offset="1" stop-color="#7fa2e8" stop-opacity=".1"/></radialGradient></defs>
           <circle class="base-dome" r="1" fill="url(#base-dome)"/>
           <ellipse class="base-grid" rx="1" ry=".31"/>
           <ellipse class="base-grid" rx=".31" ry="1"/>
@@ -107,6 +106,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=full-core-sweep"></script>
+  <script type="module" src="./app.js?v=superimposed-hopf-base"></script>
 </body>
 </html>

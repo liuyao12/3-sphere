@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=superimposed-hopf-base">
+  <link rel="stylesheet" href="./style.css?v=distinct-slider-stops">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -52,6 +52,11 @@
       </aside>
       <div class="morph-dock" aria-label="Torus morph control">
         <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2" aria-label="Morph torus from z-axis to equatorial circle">
+        <div class="morph-stops">
+          <button type="button" data-morph-stop="100" aria-label="Equatorial core circle"></button>
+          <button type="button" data-morph-stop="50" aria-label="Balanced Clifford torus"></button>
+          <button type="button" data-morph-stop="0" aria-label="Axial core circle"></button>
+        </div>
         <span class="sr-only"><output id="morph-value">η 31.7°</output><output id="intersection-count">24</output><span id="intersection-label">CIRCLES IN TWO RULINGS</span></span>
       </div>
       <div class="projection-dock" aria-label="Stereographic projection point control">
@@ -106,6 +111,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=superimposed-hopf-base"></script>
+  <script type="module" src="./app.js?v=distinct-slider-stops"></script>
 </body>
 </html>

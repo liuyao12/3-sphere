@@ -549,7 +549,15 @@ modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)
 window.addEventListener('popstate',()=>{selectMode(modeFromUrl());setWalkView(new URL(location.href).searchParams.get('view')==='walk',null)});
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});
-const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value');morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0;morph.addEventListener('input',()=>{torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusGeometry)});
+const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value'),morphStops=[...document.querySelectorAll('[data-morph-stop]')];morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0,morphSnapFrame=0;
+function updateTorusFromControl(){torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;updateTorusGeometry()}
+morph.addEventListener('input',()=>{cancelAnimationFrame(morphSnapFrame);cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusFromControl)});
+function glideTorusTo(target){
+  cancelAnimationFrame(morphSnapFrame);const start=+morph.value,started=performance.now(),duration=900;
+  function glide(now){const raw=Math.min(1,(now-started)/duration),t=raw<.5?4*raw*raw*raw:1-(-2*raw+2)**3/2;morph.value=start+(target-start)*t;updateTorusFromControl();if(raw<1)morphSnapFrame=requestAnimationFrame(glide)}
+  morphSnapFrame=requestAnimationFrame(glide);
+}
+morphStops.forEach(stop=>stop.addEventListener('click',()=>glideTorusTo(+stop.dataset.morphStop)));
 const projectionControl=document.querySelector('#projection-point'),projectionStops=[...document.querySelectorAll('[data-projection-stop]')];let projectionFrame=0,projectionSnapFrame=0;
 function updateOverviewProjection(){
   const amount=+projectionControl.value/100,angle=amount*Math.PI/2,c=Math.cos(angle),s=Math.sin(angle);

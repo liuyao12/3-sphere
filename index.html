@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=movable-stereographic-pole">
+  <link rel="stylesheet" href="./style.css?v=full-core-sweep">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -55,9 +55,12 @@
         <span class="sr-only"><output id="morph-value">η 31.7°</output><output id="intersection-count">24</output><span id="intersection-label">CIRCLES IN TWO RULINGS</span></span>
       </div>
       <div class="projection-dock" aria-label="Stereographic projection point control">
-        <label for="projection-point">STEREOGRAPHIC POLE <output id="projection-value">ON CORE A</output></label>
-        <input id="projection-point" type="range" min="0" max="100" step="0.1" value="0" aria-label="Move the stereographic pole off the first core circle">
-        <div><span>LINE + CIRCLE</span><span>HOPF LINK</span></div>
+        <input id="projection-point" type="range" min="0" max="100" step="0.1" value="0" aria-label="Move the stereographic pole between the two core circles">
+        <div class="projection-stops">
+          <button type="button" data-projection-stop="0" aria-label="Projection pole on the first core circle"></button>
+          <button type="button" data-projection-stop="50" aria-label="Equal linked core circles"></button>
+          <button type="button" data-projection-stop="100" aria-label="Projection pole on the second core circle"></button>
+        </div>
       </div>
       <div class="hopf-base-control" id="hopf-base-control" aria-label="Hopf base sphere selector">
         <span>BASE S²</span>
@@ -104,6 +107,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=movable-stereographic-pole"></script>
+  <script type="module" src="./app.js?v=full-core-sweep"></script>
 </body>
 </html>

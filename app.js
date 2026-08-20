@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 
 const PHI=(1+Math.sqrt(5))/2, EPS=1e-7;
 const stage=document.querySelector('#stage');
@@ -67,22 +70,23 @@ const boundaryCells=[...new Set(boundaryFaces.map(f=>f.cell))];
 
 function complement(u,v){const out=[];for(const seed of [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]){let q=seed.map((x,i)=>x-dot(seed,u)*u[i]-dot(seed,v)*v[i]);for(const n of out)q=q.map((x,i)=>x-dot(q,n)*n[i]);if(norm(q)>1e-6)out.push(normalize(q));if(out.length===2)break}return out}
 const [basisN,basisM]=complement(basisU,basisV);
-// The overview pole moves away from the first core along a great-circle arc.
-// At zero that core passes through infinity; away from zero both core curves
-// project to finite Euclidean circles and display their Hopf linking.
+// The overview pole moves along the shortest great-circle arc from one core to
+// the other. At the endpoints one core becomes a line through infinity; at the
+// midpoint the two projected core circles are congruent and Hopf linked.
 const overviewCorePole=basisU.map((x,i)=>Math.cos(.17)*x+Math.sin(.17)*basisV[i]),overviewCoreTangent=basisU.map((x,i)=>-Math.sin(.17)*x+Math.cos(.17)*basisV[i]);
 projectionPole=[...overviewCorePole];projectionAxes=[[...overviewCoreTangent],[...basisN],[...basisM]];
 let overviewPole=[...projectionPole],overviewAxes=projectionAxes.map(axis=>[...axis]),overviewProjectionRevision=0;
-const extremeMaterial=new THREE.LineBasicMaterial({color:0x5ce1e6,transparent:true,opacity:.76,depthWrite:false});
-const extremeCircleLine=new THREE.Line(new THREE.BufferGeometry(),extremeMaterial),extremeAxisMaterial=new THREE.LineBasicMaterial({color:0x8ff3d5,transparent:true,opacity:.82,depthWrite:false}),extremeAxisLine=new THREE.Line(new THREE.BufferGeometry(),extremeAxisMaterial);
+const extremeMaterial=new LineMaterial({color:0xe32645,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false}),extremeAxisMaterial=new LineMaterial({color:0xb81032,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false});
+const extremeCircleLine=new LineSegments2(new LineSegmentsGeometry(),extremeMaterial),extremeAxisLine=new LineSegments2(new LineSegmentsGeometry(),extremeAxisMaterial);
 groups.extremes.add(extremeCircleLine,extremeAxisLine);
+function wideSegmentGeometry(points){const positions=new Float32Array(points.length*3);points.forEach((point,index)=>{positions[index*3]=point.x;positions[index*3+1]=point.y;positions[index*3+2]=point.z});const geometry=new LineSegmentsGeometry();geometry.setPositions(positions);return geometry}
 function rebuildExtremes(){
   const circle=[];let previous=null;
   for(let i=0;i<=360;i++){const t=i/360*Math.PI*2,p=project(basisN.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisM[k]));if(previous&&segmentVisible(previous,p))circle.push(previous,p);previous=p}
-  extremeCircleLine.geometry.dispose();extremeCircleLine.geometry=new THREE.BufferGeometry().setFromPoints(circle);
+  extremeCircleLine.geometry.dispose();extremeCircleLine.geometry=wideSegmentGeometry(circle);
   const axis=[];previous=null;
   for(let i=0;i<=360;i++){const t=i/360*Math.PI*2,p=project(basisU.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisV[k]));if(previous&&segmentVisible(previous,p))axis.push(previous,p);previous=p}
-  extremeAxisLine.geometry.dispose();extremeAxisLine.geometry=new THREE.BufferGeometry().setFromPoints(axis);
+  extremeAxisLine.geometry.dispose();extremeAxisLine.geometry=wideSegmentGeometry(axis);
 }
 rebuildExtremes();
 
@@ -546,19 +550,24 @@ window.addEventListener('popstate',()=>{selectMode(modeFromUrl());setWalkView(ne
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`});
 const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value');morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0;morph.addEventListener('input',()=>{torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusGeometry)});
-const projectionControl=document.querySelector('#projection-point'),projectionValue=document.querySelector('#projection-value');let projectionFrame=0;
+const projectionControl=document.querySelector('#projection-point'),projectionStops=[...document.querySelectorAll('[data-projection-stop]')];let projectionFrame=0,projectionSnapFrame=0;
 function updateOverviewProjection(){
-  const amount=+projectionControl.value/100,angle=amount*THREE.MathUtils.degToRad(14),c=Math.cos(angle),s=Math.sin(angle);
-  overviewPole=overviewCorePole.map((x,i)=>c*x+s*basisN[i]);overviewAxes=[[...overviewCoreTangent],basisN.map((x,i)=>c*x-s*overviewCorePole[i]),[...basisM]];
-  projectionValue.value=amount<.01?'ON CORE A':`${(amount*14).toFixed(1)}° OFF CORE`;
+  const amount=+projectionControl.value/100,angle=amount*Math.PI/2,c=Math.cos(angle),s=Math.sin(angle);
+  overviewPole=overviewCorePole.map((x,i)=>c*x+s*basisN[i]);overviewAxes=[overviewCoreTangent.map((x,i)=>c*x+s*basisM[i]),basisN.map((x,i)=>c*x-s*overviewCorePole[i]),basisM.map((x,i)=>c*x-s*overviewCoreTangent[i])];
   if(walkView)return;projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;overviewProjectionRevision++;ensureProjectedPolytope(visualMode);rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();
 }
-projectionControl.addEventListener('input',()=>{cancelAnimationFrame(projectionFrame);projectionFrame=requestAnimationFrame(updateOverviewProjection)});
+projectionControl.addEventListener('input',()=>{cancelAnimationFrame(projectionSnapFrame);cancelAnimationFrame(projectionFrame);projectionFrame=requestAnimationFrame(updateOverviewProjection)});
+function glideProjectionTo(target){
+  cancelAnimationFrame(projectionSnapFrame);const start=+projectionControl.value,started=performance.now(),duration=900;
+  function glide(now){const raw=Math.min(1,(now-started)/duration),t=raw<.5?4*raw*raw*raw:1-(-2*raw+2)**3/2;projectionControl.value=start+(target-start)*t;updateOverviewProjection();if(raw<1)projectionSnapFrame=requestAnimationFrame(glide)}
+  projectionSnapFrame=requestAnimationFrame(glide);
+}
+projectionStops.forEach(stop=>stop.addEventListener('click',()=>glideProjectionTo(+stop.dataset.projectionStop)));
 selectMode(modeFromUrl(),'replace');if(new URL(location.href).searchParams.get('view')==='walk')setWalkView(true,null);
 
 const atlas=document.querySelector('#atlas-grid');
 for(let i=0;i<100;i++){const el=document.createElement('button');el.className='atlas-cell';el.type='button';el.title=`Boundary tetrahedron ${i+1}`;el.setAttribute('aria-label',el.title);el.addEventListener('click',()=>{document.querySelectorAll('.atlas-cell.active').forEach(x=>x.classList.remove('active'));el.classList.add('active');selectMode('cell600','push')});atlas.append(el)}
 
-function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView){camera.position.set(0,0,0);camera.updateMatrixWorld()}else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}}new ResizeObserver(resize).observe(stage);resize();
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);extremeMaterial.resolution.set(w,h);extremeAxisMaterial.resolution.set(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView){camera.position.set(0,0,0);camera.updateMatrixWorld()}else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}}new ResizeObserver(resize).observe(stage);resize();
 function animate(){requestAnimationFrame(animate);if(!walkView)controls.update();renderer.render(scene,camera)}animate();
 console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges. Torus seams: ${boundaryFaces.length} triangles / ${boundaryCells.length} tetrahedra; ${solidVertexSet.size}+${poly.v.length-solidVertexSet.size} dual cells / ${crossingEdges.length} pentagons.`);

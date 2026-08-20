@@ -168,26 +168,39 @@ const torusRulingA=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.L
 const torusRulingB=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6846c7,transparent:true,opacity:.8,depthWrite:false}));
 groups.torus.add(torusSurface,torusRulingA,torusRulingB);
 function setTorusSurface(positions,colors){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));torusSurface.geometry.dispose();torusSurface.geometry=geo}
+function midpointDeviation2(p,a,b){const x=p.x-(a.x+b.x)/2,y=p.y-(a.y+b.y)/2,z=p.z-(a.z+b.z)/2;return x*x+y*y+z*z}
+function centerDeviation2(p,a,b,c,d){const x=p.x-(a.x+b.x+c.x+d.x)/4,y=p.y-(a.y+b.y+c.y+d.y)/4,z=p.z-(a.z+b.z+c.z+d.z)/4;return x*x+y*y+z*z}
+function appendAdaptiveTorusPatch(pointAt,positions,colors,color,maxDepth=4){
+  const sample=(s,t)=>{const [u,v]=pointAt(s,t);return project(torusPoint(u,v))};
+  const addTriangle=(a,b,c)=>{if(!torusTriangleVisible(a,b,c))return;for(const p of[a,b,c]){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}};
+  function subdivide(s0,t0,s1,t1,p00,p10,p01,p11,depth){
+    const sm=(s0+s1)/2,tm=(t0+t1)/2,p0m=sample(s0,tm),p1m=sample(s1,tm),pm0=sample(sm,t0),pm1=sample(sm,t1),pmm=sample(sm,tm);
+    const samples=[p00,p10,p01,p11,p0m,p1m,pm0,pm1,pmm],allVisible=samples.every(projectionVisible);
+    let refine=!allVisible;
+    if(allVisible){
+      const maxEdge2=Math.max(p00.distanceToSquared(p10),p10.distanceToSquared(p11),p11.distanceToSquared(p01),p01.distanceToSquared(p00));
+      const maxCurve2=Math.max(midpointDeviation2(pm0,p00,p10),midpointDeviation2(pm1,p01,p11),midpointDeviation2(p0m,p00,p01),midpointDeviation2(p1m,p10,p11),centerDeviation2(pmm,p00,p10,p01,p11));
+      refine=maxEdge2>.18||maxCurve2>.00032;
+    }
+    if(refine&&depth<maxDepth){
+      subdivide(s0,t0,sm,tm,p00,pm0,p0m,pmm,depth+1);
+      subdivide(sm,t0,s1,tm,pm0,p10,pmm,p1m,depth+1);
+      subdivide(s0,tm,sm,t1,p0m,pmm,p01,pm1,depth+1);
+      subdivide(sm,tm,s1,t1,pmm,p1m,pm1,p11,depth+1);
+      return;
+    }
+    addTriangle(p00,p10,p01);addTriangle(p10,p11,p01);
+  }
+  subdivide(0,0,1,1,sample(0,0),sample(1,0),sample(0,1),sample(1,1),0);
+}
 function buildHopfTorusGrid(){
-  const N=12,SUBDIVISIONS=4,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],color=new THREE.Color(torusPalettes.hopf[1]);
-  const point=(a,b)=>torusPoint((b-a)/2,(a+b)/2);
-  const addTriangle=(qs,colorIndex)=>{
-    if(colorIndex===0)return;
-    const ps=qs.map(project);
-    if(!torusTriangleVisible(ps[0],ps[1],ps[2]))return;
-    for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}
-  };
+  const N=12,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],color=new THREE.Color(torusPalettes.hopf[1]);
   // In Hopf coordinates a=v-u and b=u+v, each tile edge is itself a fiber.
   // b runs through 4π so this rectangle covers the torus exactly once.
   for(let ia=0;ia<N;ia++)for(let ib=0;ib<2*N;ib++){
-    const shade=(ia+ib)&1;
-    for(let i=0;i<SUBDIVISIONS;i++)for(let j=0;j<SUBDIVISIONS;j++){
-      const a0=(ia+i/SUBDIVISIONS)*step,a1=(ia+(i+1)/SUBDIVISIONS)*step;
-      const b0=(ib+j/SUBDIVISIONS)*step,b1=(ib+(j+1)/SUBDIVISIONS)*step;
-      const q00=point(a0,b0),q10=point(a1,b0),q01=point(a0,b1),q11=point(a1,b1);
-      addTriangle([q00,q10,q01],shade);
-      addTriangle([q10,q11,q01],shade);
-    }
+    if(((ia+ib)&1)===0)continue;
+    const a0=ia*step,b0=ib*step;
+    appendAdaptiveTorusPatch((s,t)=>{const a=a0+s*step,b=b0+t*step;return[(b-a)/2,(a+b)/2]},positions,colors,color);
   }
   for(const[family,sign]of[-1,1].entries())for(let k=0;k<N;k++){
     const offset=k/N*Math.PI*2;
@@ -208,12 +221,11 @@ function buildHopfTorusGrid(){
   document.querySelector('#intersection-label').textContent='HOPF CIRCLES SHOWN';
 }
 function buildPlainTorus(){
-  const NU=96,NV=64,du=Math.PI*2/NU,dv=Math.PI*2/NV,positions=[],colors=[];
+  const NU=24,NV=16,du=Math.PI*2/NU,dv=Math.PI*2/NV,positions=[],colors=[];
   const color=new THREE.Color(visualMode==='cell120'?0x7656d4:0x245bd6);
-  const addTriangle=qs=>{const ps=qs.map(project);if(!torusTriangleVisible(ps[0],ps[1],ps[2]))return;for(const p of ps){positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b)}};
   for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){
-    const u=i*du,v=j*dv,q00=torusPoint(u,v),q10=torusPoint(u+du,v),q01=torusPoint(u,v+dv),q11=torusPoint(u+du,v+dv);
-    addTriangle([q00,q10,q01]);addTriangle([q10,q11,q01]);
+    const u0=i*du,v0=j*dv;
+    appendAdaptiveTorusPatch((s,t)=>[u0+s*du,v0+t*dv],positions,colors,color);
   }
   setTorusSurface(positions,colors);
   for(const ruling of[torusRulingA,torusRulingB]){ruling.geometry.dispose();ruling.geometry=new THREE.BufferGeometry()}

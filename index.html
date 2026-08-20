@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=paired-hopf-poles">
+  <link rel="stylesheet" href="./style.css?v=fast-polytope-modes">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -39,8 +39,8 @@
         <p class="panel-kicker">THREE VIEWS</p>
         <div class="mode-picker" role="radiogroup" aria-label="Structure dividing the torus">
           <label class="mode-row"><input type="radio" name="view-mode" value="hopf" checked><i>01</i><span><b>Hopf fibration</b><small>One family through S³; two on the torus</small></span></label>
-          <label class="mode-row"><input type="radio" name="view-mode" value="cell600"><i>02</i><span><b>600-cell</b><small>Tetrahedral cell intersections</small></span></label>
-          <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>03</i><span><b>120-cell</b><small>Dodecahedral cell intersections</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="cell600"><i>02</i><span><b>600-cell</b><small>Full tetrahedral complex</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>03</i><span><b>120-cell</b><small>Full dodecahedral complex</small></span></label>
         </div>
         <p class="grid-description" id="grid-description">Hopf rulings · 12 + 12 circles</p>
         <button class="walk-toggle" id="walk-toggle" type="button">INSIDE VIEW</button>
@@ -88,9 +88,8 @@
         <p class="eyebrow">THE SEAM IN S³</p>
         <h2>Why exactly <em>100?</em></h2>
         <p>Start with one regular decagon running along a great circle of the 600-cell. The tetrahedra touching its ten vertices form a solid torus of <strong>150 cells</strong>. Its boundary is a torus tiled by <strong>100 triangles</strong>—each triangle belongs to one of <strong>100 boundary tetrahedra</strong>.</p>
-        <p>This is the clean version of the claim: the torus is the boundary between two regions, not a generic smooth slice through only 100 tetrahedra. The smooth surface shown above passes through the same 50 boundary vertices; the faceted layer shows the actual 600-cell seam.</p>
-        <p>The live torus is colored by the polytope cell containing each point. Its patch count therefore changes as the torus moves. Adjacent patches receive different shades; odd adjacency cycles sometimes require more than two colors, so a literal two-color checkerboard is not always possible.</p>
-        <p><strong>For the dual 120-cell, the count changes.</strong> The decomposition becomes two linked solid tori of <strong>60 dodecahedra</strong> each. Their common boundary is a bumpy torus made from <strong>200 regular pentagons</strong>. Turn on “120-cell seam” to see those pentagonal cycles projected into ℝ³.</p>
+        <p>This is the clean version of the claim: the torus is the boundary between two regions, not a generic smooth slice through only 100 tetrahedra. The interactive polytope modes therefore show the full cell complex and keep the moving torus smooth, without recomputing a sampled cell partition on every frame.</p>
+        <p><strong>For the dual 120-cell, the count changes.</strong> The decomposition becomes two linked solid tori of <strong>60 dodecahedra</strong> each. Their common boundary is a bumpy torus made from <strong>200 regular pentagons</strong>.</p>
       </div>
       <div class="atlas-card" id="atlas-card">
         <div class="atlas-head">
@@ -113,6 +112,6 @@
       <p class="sources">READ: <a href="https://en.wikipedia.org/wiki/600-cell">600-CELL</a> · <a href="https://en.wikipedia.org/wiki/120-cell">120-CELL</a> · <a href="https://en.wikipedia.org/wiki/Hopf_fibration">HOPF FIBRATION</a> · <a href="https://commons.wikimedia.org/wiki/File:100_tets.jpg">100 TETS</a> · <a href="https://ns1.omnitech.net/data/Books/Math/99/120cell/">TORUS CONSTRUCTION</a></p>
     </footer>
   </main>
-  <script type="module" src="./app.js?v=paired-hopf-poles"></script>
+  <script type="module" src="./app.js?v=fast-polytope-modes"></script>
 </body>
 </html>

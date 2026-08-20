@@ -411,7 +411,7 @@ function writeModeUrl(mode,action){
 }
 function applyMode(mode,urlAction){
   visualMode=mode;groups.hopf.visible=mode==='hopf';hopfBaseControl.hidden=mode!=='hopf';groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
-  const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — The 3-sphere, opened up`;writeModeUrl(mode,urlAction);
+  const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — Seeing the 3-sphere, from within`;writeModeUrl(mode,urlAction);
   if(walkView){const center=currentWalkCenter();setWalkChart(center,tangentFrame(center,projectionAxes));rebuildChart(false);writeViewUrl('replace')}else{ensureProjectedPolytope(mode);updateTorusGeometry()}
   requestRender();
 }

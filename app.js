@@ -172,10 +172,16 @@ function updateSelectedHopfFiber(base){
 rebuildAmbientHopf();
 function colorGraph(count,edges){const neighbors=Array.from({length:count},()=>new Set());for(const[a,b]of edges){neighbors[a].add(b);neighbors[b].add(a)}const colors=Array(count).fill(-1);for(let done=0;done<count;done++){let pick=-1,bestSat=-1,bestDegree=-1;for(let i=0;i<count;i++)if(colors[i]<0){const sat=new Set([...neighbors[i]].map(n=>colors[n]).filter(c=>c>=0)).size,degree=neighbors[i].size;if(sat>bestSat||sat===bestSat&&degree>bestDegree){pick=i;bestSat=sat;bestDegree=degree}}const used=new Set([...neighbors[pick]].map(n=>colors[n]).filter(c=>c>=0));let color=0;while(used.has(color))color++;colors[pick]=color}return colors}
 const torusPalettes={hopf:[0x245bd6,0x7255d9]};
-const torusColorings={cell600:colorGraph(dualVertices.length,dualEdges),cell120:colorGraph(poly.v.length,poly.edges)};
-const walkPalettes={cell600:[0x245bd6,0x00a0a8,0x7656d4],cell120:[0x245bd6,0x00a0a8,0x7656d4,0x16976f,0xb04fbf]};
+// The five equal classes below are the natural compound of five 24-cells in
+// the 600-cell's vertex set. They therefore color the 120 dodecahedral cells
+// of the dual 120-cell with no equal colors across a shared face.
+const cell120NaturalColoring=[2,2,4,4,0,0,3,3,2,2,3,0,4,3,4,0,0,4,3,4,0,3,2,2,4,4,1,2,2,1,4,4,3,3,1,2,2,1,3,3,0,0,1,2,2,1,0,0,4,1,2,2,2,2,1,4,0,1,2,2,2,2,1,0,3,1,2,2,2,2,1,3,4,4,3,1,1,3,4,4,0,0,4,1,1,4,0,0,3,3,0,1,1,0,3,3,1,0,4,4,4,4,0,1,1,3,0,0,0,0,3,1,1,4,3,3,3,3,4,1];
+const cellColorings={cell600:colorGraph(dualVertices.length,dualEdges),cell120:cell120NaturalColoring};
+function verifyCellColoring(mode,edges){const colors=cellColorings[mode];if(edges.some(([a,b])=>colors[a]===colors[b]))throw new Error(`${mode} cell coloring has adjacent duplicates`)}
+verifyCellColoring('cell600',dualEdges);verifyCellColoring('cell120',poly.edges);
+const walkPalettes={cell600:[0x245bd6,0x008f95,0x7656d4,0x16845f],cell120:[0x245bd6,0x008f95,0x7656d4,0x16845f,0xad3f9b]};
 function walkCellColor(mode,id){
-  const source=mode==='cell120'?'cell120':'cell600',colorIndex=torusColorings[source][id],palette=walkPalettes[source];
+  const source=mode==='cell120'?'cell120':'cell600',colorIndex=cellColorings[source][id],palette=walkPalettes[source];
   if(colorIndex<palette.length)return palette[colorIndex];
   return new THREE.Color().setHSL((colorIndex*.61803398875)%1,.68,.48).getHex();
 }
@@ -211,7 +217,7 @@ function appendAdaptiveTorusPatch(pointAt,positions,colors,color,maxDepth=4){
   }
   subdivide(0,0,1,1,sample(0,0),sample(1,0),sample(0,1),sample(1,1),0);
 }
-function buildHopfTorusGrid(){
+function buildTorusCheckerboard(){
   const N=12,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],color=new THREE.Color(torusPalettes.hopf[1]);
   // In Hopf coordinates a=v-u and b=u+v, each tile edge is itself a fiber.
   // b runs through 4π so this rectangle covers the torus exactly once.
@@ -234,21 +240,10 @@ function buildHopfTorusGrid(){
   torusRulingA.geometry=new THREE.BufferGeometry().setFromPoints(rulings[0]);
   torusRulingB.geometry.dispose();
   torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);
-  document.querySelector('#grid-description').textContent=`${AMBIENT_HOPF_COUNT} fibers through S³ · 12 + 12 on torus`;
-}
-function buildPlainTorus(){
-  const NU=24,NV=16,du=Math.PI*2/NU,dv=Math.PI*2/NV,positions=[],colors=[];
-  const color=new THREE.Color(visualMode==='cell120'?0x7656d4:0x245bd6);
-  for(let i=0;i<NU;i++)for(let j=0;j<NV;j++){
-    const u0=i*du,v0=j*dv;
-    appendAdaptiveTorusPatch((s,t)=>[u0+s*du,v0+t*dv],positions,colors,color);
-  }
-  setTorusSurface(positions,colors);
-  for(const ruling of[torusRulingA,torusRulingB]){ruling.geometry.dispose();ruling.geometry=new THREE.BufferGeometry()}
-  document.querySelector('#grid-description').textContent=`Full ${visualMode==='cell120'?'120':'600'}-cell · unpartitioned torus`;
+  document.querySelector('#grid-description').textContent=visualMode==='hopf'?`${AMBIENT_HOPF_COUNT} fibers through S³ · 12 + 12 on torus`:`Full ${visualMode==='cell120'?'120':'600'}-cell · equal-area torus checkerboard`;
 }
 function updateLimitCurves(){groups.extremes.visible=true}
-function updateTorusGeometry(){if(visualMode==='hopf')buildHopfTorusGrid();else buildPlainTorus();updateLimitCurves()}
+function updateTorusGeometry(){buildTorusCheckerboard();updateLimitCurves()}
 scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new THREE.DirectionalLight(0xffffff,2.15);keyLight.position.set(4,7,5);scene.add(keyLight);
 
 // A cell-centered atlas. The projection pole is kept antipodal to the current

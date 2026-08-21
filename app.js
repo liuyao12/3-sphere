@@ -431,7 +431,7 @@ function setHopfBaseFromScreen(point){
 function setTorusFromScreen(point){const display=hopfTrackball(point),inverse=hopfBaseOrientation.clone().invert();setTorusLatitude(display.applyQuaternion(inverse).z)}
 hopfBase.addEventListener('pointerdown',event=>{
   const point=hopfScreenPoint(event),pole=event.target.closest?.('[data-pole]');hopfBase.setPointerCapture(event.pointerId);hopfBase.classList.add('dragging');
-  if(event.target===hopfTorusHandle||event.target===hopfTorusHandleHit){hopfDragMode='torus';setTorusFromScreen(point)}
+  if(event.target===hopfTorusHandle||event.target===hopfTorusHandleHit){event.preventDefault();hopfDragMode='torus';setTorusFromScreen(point)}
   else if(pole){hopfDragMode='point';setHopfBaseVector(new THREE.Vector3(0,0,pole.dataset.pole==='north'?1:-1))}
   else if(event.target===hopfBasePoint||event.target===hopfBaseHalo){hopfDragMode='point';setHopfBaseFromScreen(point)}
   else{hopfDragMode='sphere';hopfDragStartVector.copy(hopfTrackball(point));hopfDragStartOrientation.copy(hopfBaseOrientation)}

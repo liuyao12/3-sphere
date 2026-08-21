@@ -1,8 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
-import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 
 const PHI=(1+Math.sqrt(5))/2, EPS=1e-7;
 const stage=document.querySelector('#stage');
@@ -85,17 +82,28 @@ const [basisN,basisM]=complement(basisU,basisV);
 const overviewCorePole=basisU.map((x,i)=>Math.cos(.17)*x+Math.sin(.17)*basisV[i]),overviewCoreTangent=basisU.map((x,i)=>-Math.sin(.17)*x+Math.cos(.17)*basisV[i]);
 projectionPole=[...overviewCorePole];projectionAxes=[[...overviewCoreTangent],[...basisN],[...basisM]];
 let overviewPole=[...projectionPole],overviewAxes=projectionAxes.map(axis=>[...axis]),overviewProjectionRevision=0;
-const extremeMaterial=new LineMaterial({color:0xe32645,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false}),extremeAxisMaterial=new LineMaterial({color:0xa21caf,linewidth:3.6,transparent:true,opacity:.94,depthWrite:false});
-const extremeCircleLine=new LineSegments2(new LineSegmentsGeometry(),extremeMaterial),extremeAxisLine=new LineSegments2(new LineSegmentsGeometry(),extremeAxisMaterial);
-groups.extremes.add(extremeCircleLine,extremeAxisLine);
-function wideSegmentGeometry(points){const positions=new Float32Array(points.length*3);points.forEach((point,index)=>{positions[index*3]=point.x;positions[index*3+1]=point.y;positions[index*3+2]=point.z});const geometry=new LineSegmentsGeometry();geometry.setPositions(positions);return geometry}
+const extremeMaterial=new THREE.MeshPhongMaterial({color:0xe32645,transparent:true,opacity:1,depthWrite:true,shininess:70}),extremeAxisMaterial=new THREE.MeshPhongMaterial({color:0xa21caf,transparent:true,opacity:1,depthWrite:true,shininess:70});
+const extremeCircleGroup=new THREE.Group(),extremeAxisGroup=new THREE.Group();groups.extremes.add(extremeCircleGroup,extremeAxisGroup);
+function clearTubeGroup(group){while(group.children.length){const child=group.children[0];group.remove(child);child.geometry.dispose()}}
+function projectedCorePaths(axisA,axisB,steps=360){
+  const paths=[];let current=[],previous=null;
+  const flush=()=>{if(current.length>1)paths.push(current);current=[]};
+  for(let i=0;i<=steps;i++){
+    const t=i/steps*Math.PI*2,p=project(axisA.map((x,k)=>Math.cos(t)*x+Math.sin(t)*axisB[k]));
+    if(projectionVisible(p)){if(previous&&segmentVisible(previous,p))current.push(p);else{flush();current=[p]}}else flush();previous=p;
+  }
+  flush();return paths;
+}
+function buildCoreTube(group,axisA,axisB,material){
+  clearTubeGroup(group);
+  for(const points of projectedCorePaths(axisA,axisB)){
+    const closed=points.length>12&&points[0].distanceTo(points.at(-1))<.08;if(closed)points.pop();
+    const curve=new THREE.CatmullRomCurve3(points,closed,'centripetal'),tube=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(12,points.length-1),.065,10,closed),material);tube.renderOrder=5;group.add(tube);
+    if(!closed)for(const point of[points[0],points.at(-1)]){const cap=new THREE.Mesh(new THREE.SphereGeometry(.065,10,7),material);cap.position.copy(point);cap.renderOrder=5;group.add(cap)}
+  }
+}
 function rebuildExtremes(){
-  const circle=[];let previous=null;
-  for(let i=0;i<=360;i++){const t=i/360*Math.PI*2,p=project(basisN.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisM[k]));if(previous&&segmentVisible(previous,p))circle.push(previous,p);previous=p}
-  extremeCircleLine.geometry.dispose();extremeCircleLine.geometry=wideSegmentGeometry(circle);
-  const axis=[];previous=null;
-  for(let i=0;i<=360;i++){const t=i/360*Math.PI*2,p=project(basisU.map((x,k)=>Math.cos(t)*x+Math.sin(t)*basisV[k]));if(previous&&segmentVisible(previous,p))axis.push(previous,p);previous=p}
-  extremeAxisLine.geometry.dispose();extremeAxisLine.geometry=wideSegmentGeometry(axis);
+  buildCoreTube(extremeCircleGroup,basisN,basisM,extremeAxisMaterial);buildCoreTube(extremeAxisGroup,basisU,basisV,extremeMaterial);
 }
 rebuildExtremes();
 
@@ -150,9 +158,8 @@ function rebuildAmbientHopf(){
   }
   ambientHopfFibers.geometry.dispose();ambientHopfFibers.geometry=new THREE.BufferGeometry().setFromPoints(points);
 }
-function updateSelectedHopfFiber(baseX,baseY){
-  const baseZ=Math.sqrt(Math.max(0,1-baseX*baseX-baseY*baseY));
-  const eta=.5*Math.acos(baseZ),delta=Math.atan2(baseY,baseX),points=[];
+function updateSelectedHopfFiber(base){
+  const eta=.5*Math.acos(THREE.MathUtils.clamp(base.z,-1,1)),delta=Math.atan2(base.y,base.x),points=[];
   let previous=null;
   for(let step=0;step<=720;step++){
     const t=step/720*Math.PI*2,p=project(hopfFiberPoint(eta,delta,t));
@@ -329,7 +336,7 @@ function tangentFrame(center,seeds){
 }
 function rebuildChart(includeTorus=true){
   rebuildExtremes();
-  if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY)}
+  if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector)}
   rebuildWalkCell();
   if(includeTorus)updateTorusGeometry();
 }
@@ -342,7 +349,7 @@ function enterWalkCell(neighbor){
   function frame(now){
     const raw=Math.min(1,(now-started)/520),t=raw*raw*(3-2*raw),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
     setWalkChart(center,axes);rebuildWalkCell(false);requestRender();
-    if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY)}
+    if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector)}
     if(raw<1)requestAnimationFrame(frame);else{walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}
   }
   requestAnimationFrame(frame);
@@ -359,7 +366,7 @@ function setWalkView(active,urlAction='push'){
     const center=currentWalkCenter(),baseAxis=tangentFrame(center,overviewAxes);setWalkChart(center,baseAxis);
     controls.enabled=false;camera.near=.015;camera.fov=72;camera.updateProjectionMatrix();rebuildChart(false);aimInsideAtFirstFace();
   }else{
-    controls.enabled=true;camera.near=.05;camera.fov=38;camera.updateProjectionMatrix();projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;ensureProjectedPolytope(visualMode);controls.minDistance=4;controls.maxDistance=32;camera.up.set(0,0,1);camera.position.set(7.4,8.8,13);controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update();groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();
+    controls.enabled=true;camera.near=.05;camera.fov=38;camera.updateProjectionMatrix();projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;ensureProjectedPolytope(visualMode);controls.minDistance=4;controls.maxDistance=32;camera.up.set(0,0,1);camera.position.set(7.4,8.8,13);controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update();groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector);updateTorusGeometry();
   }
   stageHelp.textContent=active?'DRAG TO LOOK · CLICK A FACE TO CROSS':'DRAG TO ORBIT · SCROLL TO ZOOM';
   requestRender();
@@ -388,21 +395,39 @@ groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=fals
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
 const hopfBaseControl=document.querySelector('#hopf-base-control'),hopfBase=document.querySelector('#hopf-base'),hopfBasePoint=document.querySelector('#hopf-base-point'),hopfBaseHalo=document.querySelector('#hopf-base-halo');
-let hopfBaseX=Math.sin(2*torusEta)*Math.cos(.62),hopfBaseY=Math.sin(2*torusEta)*Math.sin(.62);
-function setHopfBasePoint(x,y){
-  const radius=Math.hypot(x,y),scale=radius>.985?.985/radius:1;
-  hopfBaseX=x*scale;hopfBaseY=y*scale;
-  for(const point of[hopfBasePoint,hopfBaseHalo]){point.setAttribute('cx',hopfBaseX);point.setAttribute('cy',-hopfBaseY)}
-  updateSelectedHopfFiber(hopfBaseX,hopfBaseY);requestRender();
+const hopfPoleNorth=document.querySelector('#hopf-pole-north'),hopfPoleSouth=document.querySelector('#hopf-pole-south'),hopfGridPaths=[document.querySelector('#base-grid-x'),document.querySelector('#base-grid-y'),document.querySelector('#base-grid-z')];
+const hopfBaseVector=new THREE.Vector3(Math.sin(2*torusEta)*Math.cos(-.62),Math.sin(2*torusEta)*Math.sin(-.62),Math.cos(2*torusEta));
+const hopfBaseOrientation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-Math.PI/2),hopfDragStartOrientation=new THREE.Quaternion(),hopfDragStartVector=new THREE.Vector3(),hopfDragDelta=new THREE.Quaternion();
+let hopfDragMode='';
+function basePath(pointAt){let path='';for(let i=0;i<=96;i++){const p=pointAt(i/96*Math.PI*2).applyQuaternion(hopfBaseOrientation);path+=`${i?'L':'M'}${p.x.toFixed(4)},${(-p.y).toFixed(4)}`}return path}
+function updateHopfBaseDisplay(){
+  const display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);
+  for(const point of[hopfBasePoint,hopfBaseHalo]){point.setAttribute('cx',display.x);point.setAttribute('cy',-display.y);point.style.opacity=String(.45+.55*Math.max(0,display.z))}
+  const poles=[[hopfPoleNorth,new THREE.Vector3(0,0,1)],[hopfPoleSouth,new THREE.Vector3(0,0,-1)]];
+  for(const[element,pole]of poles){const p=pole.applyQuaternion(hopfBaseOrientation);element.setAttribute('cx',p.x);element.setAttribute('cy',-p.y);element.style.opacity=String(p.z>=0?1:.38)}
+  hopfGridPaths[0].setAttribute('d',basePath(t=>new THREE.Vector3(0,Math.cos(t),Math.sin(t))));
+  hopfGridPaths[1].setAttribute('d',basePath(t=>new THREE.Vector3(Math.cos(t),0,Math.sin(t))));
+  hopfGridPaths[2].setAttribute('d',basePath(t=>new THREE.Vector3(Math.cos(t),Math.sin(t),0)));
 }
-function setHopfBaseFromPointer(event){
-  const rect=hopfBase.getBoundingClientRect();
-  setHopfBasePoint((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12));
+function setHopfBaseVector(vector){hopfBaseVector.copy(vector).normalize();updateHopfBaseDisplay();updateSelectedHopfFiber(hopfBaseVector);requestRender()}
+function hopfScreenPoint(event){const rect=hopfBase.getBoundingClientRect();return new THREE.Vector2((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12))}
+function hopfTrackball(point){const vector=new THREE.Vector3(point.x,point.y,0),r2=vector.x*vector.x+vector.y*vector.y;if(r2>1)vector.multiplyScalar(1/Math.sqrt(r2));else vector.z=Math.sqrt(1-r2);return vector}
+function setHopfBaseFromScreen(point){
+  const displayedPoles=[[new THREE.Vector3(0,0,1),new THREE.Vector3(0,0,1).applyQuaternion(hopfBaseOrientation)],[new THREE.Vector3(0,0,-1),new THREE.Vector3(0,0,-1).applyQuaternion(hopfBaseOrientation)]];
+  for(const[pole,display]of displayedPoles)if(Math.hypot(point.x-display.x,point.y-display.y)<.11){setHopfBaseVector(pole);return}
+  const display=hopfTrackball(point),inverse=hopfBaseOrientation.clone().invert();setHopfBaseVector(display.applyQuaternion(inverse));
 }
-hopfBase.addEventListener('pointerdown',event=>{hopfBase.setPointerCapture(event.pointerId);setHopfBaseFromPointer(event)});
-hopfBase.addEventListener('pointermove',event=>{if(hopfBase.hasPointerCapture(event.pointerId))setHopfBaseFromPointer(event)});
-hopfBase.addEventListener('keydown',event=>{const step=event.shiftKey ? .1 : .035;if(event.key==='ArrowLeft')setHopfBasePoint(hopfBaseX-step,hopfBaseY);else if(event.key==='ArrowRight')setHopfBasePoint(hopfBaseX+step,hopfBaseY);else if(event.key==='ArrowUp')setHopfBasePoint(hopfBaseX,hopfBaseY+step);else if(event.key==='ArrowDown')setHopfBasePoint(hopfBaseX,hopfBaseY-step);else return;event.preventDefault()});
-setHopfBasePoint(hopfBaseX,hopfBaseY);
+hopfBase.addEventListener('pointerdown',event=>{
+  const point=hopfScreenPoint(event),pole=event.target.closest?.('[data-pole]');hopfBase.setPointerCapture(event.pointerId);hopfBase.classList.add('dragging');
+  if(pole){hopfDragMode='point';setHopfBaseVector(new THREE.Vector3(0,0,pole.dataset.pole==='north'?1:-1))}
+  else if(event.target===hopfBasePoint||event.target===hopfBaseHalo){hopfDragMode='point';setHopfBaseFromScreen(point)}
+  else{hopfDragMode='sphere';hopfDragStartVector.copy(hopfTrackball(point));hopfDragStartOrientation.copy(hopfBaseOrientation)}
+});
+hopfBase.addEventListener('pointermove',event=>{if(!hopfBase.hasPointerCapture(event.pointerId))return;const point=hopfScreenPoint(event);if(hopfDragMode==='point')setHopfBaseFromScreen(point);else if(hopfDragMode==='sphere'){hopfDragDelta.setFromUnitVectors(hopfDragStartVector,hopfTrackball(point));hopfBaseOrientation.copy(hopfDragDelta).multiply(hopfDragStartOrientation).normalize();updateHopfBaseDisplay()}});
+function endHopfDrag(event){hopfDragMode='';hopfBase.classList.remove('dragging');if(hopfBase.hasPointerCapture(event.pointerId))hopfBase.releasePointerCapture(event.pointerId)}
+hopfBase.addEventListener('pointerup',endHopfDrag);hopfBase.addEventListener('pointercancel',endHopfDrag);
+hopfBase.addEventListener('keydown',event=>{const step=event.shiftKey ? .1 : .035,display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);if(event.key==='ArrowLeft')display.x-=step;else if(event.key==='ArrowRight')display.x+=step;else if(event.key==='ArrowUp')display.y+=step;else if(event.key==='ArrowDown')display.y-=step;else return;setHopfBaseFromScreen(display);event.preventDefault()});
+updateHopfBaseDisplay();updateSelectedHopfFiber(hopfBaseVector);
 const publicModeNames={hopf:'hopf',cell600:'600-cell',cell120:'120-cell'};
 const internalModeNames={hopf:'hopf','600-cell':'cell600','120-cell':'cell120'};
 function modeFromUrl(){return internalModeNames[new URL(location.href).searchParams.get('mode')]||'hopf'}
@@ -439,7 +464,7 @@ function updateOverviewProjection(forcePolytope=false){
   overviewPole=overviewCorePole.map((x,i)=>c*x+s*basisN[i]);overviewAxes=[overviewCoreTangent.map((x,i)=>c*x+s*basisM[i]),basisN.map((x,i)=>c*x-s*overviewCorePole[i]),basisM.map((x,i)=>c*x-s*overviewCoreTangent[i])];
   if(walkView)return;projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;overviewProjectionRevision++;
   const now=performance.now();if(forcePolytope||now-lastPolytopeProjection>180){ensureProjectedPolytope(visualMode);lastPolytopeProjection=now}
-  rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseX,hopfBaseY);updateTorusGeometry();requestRender();
+  rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector);updateTorusGeometry();requestRender();
 }
 projectionControl.addEventListener('input',()=>{cancelAnimationFrame(projectionSnapFrame);cancelAnimationFrame(projectionFrame);projectionFrame=requestAnimationFrame(()=>updateOverviewProjection(false))});
 projectionControl.addEventListener('change',()=>updateOverviewProjection(true));
@@ -451,6 +476,6 @@ function glideProjectionTo(target){
 projectionStops.forEach(stop=>stop.addEventListener('click',()=>glideProjectionTo(+stop.dataset.projectionStop)));
 selectMode(modeFromUrl(),'replace');if(new URL(location.href).searchParams.get('view')==='walk')setWalkView(true,null);
 
-function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);extremeMaterial.resolution.set(w,h);extremeAxisMaterial.resolution.set(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView){camera.position.set(0,0,0);camera.updateMatrixWorld()}else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}requestRender()}new ResizeObserver(resize).observe(stage);resize();
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView){camera.position.set(0,0,0);camera.updateMatrixWorld()}else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}requestRender()}new ResizeObserver(resize).observe(stage);resize();
 requestRender();
 console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges.`);

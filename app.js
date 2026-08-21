@@ -60,7 +60,18 @@ function lineSegments(pairs,color,opacity){const geo=new THREE.BufferGeometry().
 function sphericalPoint(a,b,c,wa,wb,wc){return normalize(a.map((x,i)=>wa*x+wb*b[i]+wc*c[i]))}
 function appendSphericalTriangle(positions,a,b,c,subdivisions=8){const point=(i,j)=>project(sphericalPoint(a,b,c,1-(i+j)/subdivisions,i/subdivisions,j/subdivisions));for(let i=0;i<subdivisions;i++)for(let j=0;j<subdivisions-i;j++){const p0=point(i,j),p1=point(i+1,j),p2=point(i,j+1);if(triangleVisible(p0,p1,p2))for(const p of[p0,p1,p2])positions.push(p.x,p.y,p.z);if(j<subdivisions-i-1){const p3=point(i+1,j+1);if(triangleVisible(p1,p3,p2))for(const p of[p1,p3,p2])positions.push(p.x,p.y,p.z)}}}
 function sphericalFaceGeometry(vertices,faces,subdivisions=8){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]],subdivisions)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
-function sphericalFaces(vertices,faces,color,opacity,subdivisions=8){return new THREE.Mesh(sphericalFaceGeometry(vertices,faces,subdivisions),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
+function orientProjectedTriangles(positions){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;if(nx*(ax+bx+cx)+ny*(ay+by+cy)+nz*(az+bz+cz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
+function checkerFaceGeometry(vertices,faces,subdivisions=6){
+  const positions=[];
+  for(const face of faces){
+    const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));
+    // A regular triangle becomes six congruent half-edge sectors; a regular
+    // pentagon becomes ten. Paint alternating sectors, leaving equal-area holes.
+    for(let i=0;i<face.length;i++){const a=vertices[face[i]],b=vertices[face[(i+1)%face.length]],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,subdivisions)}
+  }
+  orientProjectedTriangles(positions);const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo;
+}
+function checkerFaces(vertices,faces,color,opacity,subdivisions=5){return new THREE.Mesh(checkerFaceGeometry(vertices,faces,subdivisions),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
 
 // A decagonal great circle fixes the coordinate splitting used by the torus.
 const a=0,b=[...poly.adjacency[a]][0],basisU=poly.v[a];
@@ -110,9 +121,9 @@ function projectedPointCloud(vertices,radius,color,opacity,segments){
 function ensureProjectedPolytope(mode){
   if(mode!=='cell600'&&mode!=='cell120'||projectedPolytopeRevision[mode]===overviewProjectionRevision)return;
   if(mode==='cell600'){
-    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x9b6700,.15),sphericalFaces(poly.v,cell600Faces,0xb47700,.008,4),projectedPointCloud(poly.v,.035,0xb47700,.42,7));
+    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x9b6700,.15),checkerFaces(poly.v,cell600Faces,0xb47700,.045,4),projectedPointCloud(poly.v,.035,0xb47700,.42,7));
   }else{
-    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.14),sphericalFaces(dualVertices,cell120Faces,0x9f8cff,.007,4),projectedPointCloud(dualVertices,.022,0xb8aaff,.3,5));
+    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.14),checkerFaces(dualVertices,cell120Faces,0x8f78e8,.04,4),projectedPointCloud(dualVertices,.022,0xb8aaff,.3,5));
   }
   projectedPolytopeRevision[mode]=overviewProjectionRevision;
 }
@@ -258,27 +269,8 @@ function walkCellFaces(mode,id){
 function walkFaces(){
   return walkCellFaces(visualMode,visualMode==='cell120'?walkCell120:walkCell600);
 }
-function portalPatternGeometry(vertices,face,mode){
-  const positions=[];
-  if(mode!=='cell120'){
-    const corners=face.map(id=>vertices[id]),center=normalize([0,1,2,3].map(k=>corners.reduce((sum,q)=>sum+q[k],0)));
-    // The center and three edge midpoints make six congruent sectors. One
-    // sector from each pair is painted: exactly half the spherical face area.
-    for(let i=0;i<3;i++){const a=corners[i],b=corners[(i+1)%3],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,6)}
-  }else{
-    const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));
-    // Center-to-vertex and center-to-midpoint rays make ten sectors. Painting
-    // every other sector gives a symmetric checkerboard analogue on a pentagon.
-    for(let i=0;i<5;i++){const a=vertices[face[i]],b=vertices[face[(i+1)%5]],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,6)}
-  }
-  // Give every painted fragment an outward winding. From the cell center the
-  // visible sheet is therefore its back side; after crossing it is the front.
-  for(let i=0;i<positions.length;i+=9){
-    const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8];
-    const ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
-    if(nx*(ax+bx+cx)+ny*(ay+by+cy)+nz*(az+bz+cz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}
-  }
-  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo;
+function portalPatternGeometry(vertices,face){
+  return checkerFaceGeometry(vertices,[face],6);
 }
 function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
@@ -288,7 +280,7 @@ function rebuildWalkCell(includeContext=true){
     // The face is one geometric sheet. Its tint previews the cell reached by
     // crossing it; after crossing, the reverse portal is tinted with the old
     // cell's stable graph color. This avoids doubled coplanar transparent walls.
-    const destinationColor=walkCellColor(visualMode,entry.neighbor),innerGeometry=portalPatternGeometry(entry.vertices,entry.face,visualMode),outerGeometry=innerGeometry.clone();
+    const destinationColor=walkCellColor(visualMode,entry.neighbor),innerGeometry=portalPatternGeometry(entry.vertices,entry.face),outerGeometry=innerGeometry.clone();
     const innerPattern=new THREE.Mesh(innerGeometry,new THREE.MeshPhongMaterial({color:currentColor,side:THREE.BackSide,shininess:25})),outerPattern=new THREE.Mesh(outerGeometry,new THREE.MeshPhongMaterial({color:destinationColor,side:THREE.FrontSide,shininess:25}));innerPattern.renderOrder=2;outerPattern.renderOrder=2;
     const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],8),new THREE.MeshBasicMaterial({transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,colorWrite:false}));
     mesh.userData={portal:true,neighbor:entry.neighbor,face:index,visuals:[innerPattern,outerPattern]};mesh.renderOrder=3;groups.walk.add(innerPattern,outerPattern,mesh);
@@ -310,7 +302,7 @@ function rebuildWalkCell(includeContext=true){
       const key=[...entry.face].sort((a,b)=>a-b).join(',');if(seenFaces.has(key))continue;seenFaces.add(key);if(!faceBuckets.has(color))faceBuckets.set(color,[]);faceBuckets.get(color).push(entry.face);
     }
   }
-  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(sphericalFaceGeometry(vertices,shellFaces,5),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.075,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
+  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(checkerFaceGeometry(vertices,shellFaces,5),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
   for(const[color,bucket]of nearEdgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.52);trace.renderOrder=1;groups.walk.add(trace)}
   const far=new Set();for(const cellId of immediate)for(const next of walkNeighbors(visualMode,cellId))if(!nearSet.has(next))far.add(next);
   const edgeBuckets=new Map();

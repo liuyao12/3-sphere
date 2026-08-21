@@ -235,8 +235,6 @@ function buildHopfTorusGrid(){
   torusRulingB.geometry.dispose();
   torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);
   document.querySelector('#grid-description').textContent=`${AMBIENT_HOPF_COUNT} fibers through S³ · 12 + 12 on torus`;
-  document.querySelector('#intersection-count').value=AMBIENT_HOPF_COUNT+24;
-  document.querySelector('#intersection-label').textContent='HOPF CIRCLES SHOWN';
 }
 function buildPlainTorus(){
   const NU=24,NV=16,du=Math.PI*2/NU,dv=Math.PI*2/NV,positions=[],colors=[];
@@ -248,8 +246,6 @@ function buildPlainTorus(){
   setTorusSurface(positions,colors);
   for(const ruling of[torusRulingA,torusRulingB]){ruling.geometry.dispose();ruling.geometry=new THREE.BufferGeometry()}
   document.querySelector('#grid-description').textContent=`Full ${visualMode==='cell120'?'120':'600'}-cell · unpartitioned torus`;
-  document.querySelector('#intersection-count').value='';
-  document.querySelector('#intersection-label').textContent='';
 }
 function updateLimitCurves(){groups.extremes.visible=true}
 function updateTorusGeometry(){if(visualMode==='hopf')buildHopfTorusGrid();else buildPlainTorus();updateLimitCurves()}
@@ -395,11 +391,16 @@ groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=fals
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
 const hopfBaseControl=document.querySelector('#hopf-base-control'),hopfBase=document.querySelector('#hopf-base'),hopfBasePoint=document.querySelector('#hopf-base-point'),hopfBaseHalo=document.querySelector('#hopf-base-halo');
-const hopfPoleNorth=document.querySelector('#hopf-pole-north'),hopfPoleSouth=document.querySelector('#hopf-pole-south'),hopfGridPaths=[document.querySelector('#base-grid-x'),document.querySelector('#base-grid-y'),document.querySelector('#base-grid-z')];
+const hopfPoleNorth=document.querySelector('#hopf-pole-north'),hopfPoleSouth=document.querySelector('#hopf-pole-south'),hopfGridPaths=[document.querySelector('#base-grid-x'),document.querySelector('#base-grid-y'),document.querySelector('#base-grid-z')],hopfTorusFront=document.querySelector('#hopf-torus-front'),hopfTorusBack=document.querySelector('#hopf-torus-back');
 const hopfBaseVector=new THREE.Vector3(Math.sin(2*torusEta)*Math.cos(-.62),Math.sin(2*torusEta)*Math.sin(-.62),Math.cos(2*torusEta));
 const hopfBaseOrientation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-Math.PI/2),hopfDragStartOrientation=new THREE.Quaternion(),hopfDragStartVector=new THREE.Vector3(),hopfDragDelta=new THREE.Quaternion();
-let hopfDragMode='';
+let hopfDragMode='',hopfSelectionFrame=0;
 function basePath(pointAt){let path='';for(let i=0;i<=96;i++){const p=pointAt(i/96*Math.PI*2).applyQuaternion(hopfBaseOrientation);path+=`${i?'L':'M'}${p.x.toFixed(4)},${(-p.y).toFixed(4)}`}return path}
+function updateHopfTorusCircle(){
+  const z=THREE.MathUtils.clamp(hopfBaseVector.z,-1,1),radius=Math.sqrt(Math.max(0,1-z*z));let front='',back='',previousSide='';
+  for(let i=0;i<=128;i++){const t=i/128*Math.PI*2,p=new THREE.Vector3(radius*Math.cos(t),radius*Math.sin(t),z).applyQuaternion(hopfBaseOrientation),side=p.z>=0?'front':'back',command=side===previousSide?'L':'M',part=`${command}${p.x.toFixed(4)},${(-p.y).toFixed(4)}`;if(side==='front')front+=part;else back+=part;previousSide=side}
+  hopfTorusFront.setAttribute('d',front);hopfTorusBack.setAttribute('d',back);
+}
 function updateHopfBaseDisplay(){
   const display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);
   for(const point of[hopfBasePoint,hopfBaseHalo]){point.setAttribute('cx',display.x);point.setAttribute('cy',-display.y);point.style.opacity=String(.45+.55*Math.max(0,display.z))}
@@ -408,8 +409,12 @@ function updateHopfBaseDisplay(){
   hopfGridPaths[0].setAttribute('d',basePath(t=>new THREE.Vector3(0,Math.cos(t),Math.sin(t))));
   hopfGridPaths[1].setAttribute('d',basePath(t=>new THREE.Vector3(Math.cos(t),0,Math.sin(t))));
   hopfGridPaths[2].setAttribute('d',basePath(t=>new THREE.Vector3(Math.cos(t),Math.sin(t),0)));
+  updateHopfTorusCircle();
 }
-function setHopfBaseVector(vector){hopfBaseVector.copy(vector).normalize();updateHopfBaseDisplay();updateSelectedHopfFiber(hopfBaseVector);requestRender()}
+function setHopfBaseVector(vector){
+  hopfBaseVector.copy(vector).normalize();torusEta=.5*Math.acos(THREE.MathUtils.clamp(hopfBaseVector.z,-1,1));updateHopfBaseDisplay();cancelAnimationFrame(hopfSelectionFrame);
+  hopfSelectionFrame=requestAnimationFrame(()=>{if(visualMode==='hopf')updateSelectedHopfFiber(hopfBaseVector);if(!walkView)updateTorusGeometry();requestRender()});
+}
 function hopfScreenPoint(event){const rect=hopfBase.getBoundingClientRect();return new THREE.Vector2((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12))}
 function hopfTrackball(point){const vector=new THREE.Vector3(point.x,point.y,0),r2=vector.x*vector.x+vector.y*vector.y;if(r2>1)vector.multiplyScalar(1/Math.sqrt(r2));else vector.z=Math.sqrt(1-r2);return vector}
 function setHopfBaseFromScreen(point){
@@ -439,7 +444,7 @@ function writeModeUrl(mode,action){
   history[`${action}State`](null,'',url);
 }
 function applyMode(mode,urlAction){
-  visualMode=mode;groups.hopf.visible=mode==='hopf';hopfBaseControl.hidden=mode!=='hopf';groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
+  visualMode=mode;groups.hopf.visible=mode==='hopf';hopfBaseControl.hidden=false;groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
   const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — Seeing the 3-sphere, from within`;writeModeUrl(mode,urlAction);
   if(walkView){const center=currentWalkCenter();setWalkChart(center,tangentFrame(center,projectionAxes));rebuildChart(false);writeViewUrl('replace')}else{ensureProjectedPolytope(mode);updateTorusGeometry()}
   requestRender();
@@ -449,15 +454,6 @@ modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)
 window.addEventListener('popstate',()=>{selectMode(modeFromUrl());setWalkView(new URL(location.href).searchParams.get('view')==='walk',null)});
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`;requestRender()});
-const morph=document.querySelector('#morph'),morphValue=document.querySelector('#morph-value'),morphStops=[...document.querySelectorAll('[data-morph-stop]')];morph.value=(torusEta/(Math.PI/2)*100).toFixed(1);morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;let morphFrame=0,morphSnapFrame=0;
-function updateTorusFromControl(){torusEta=+morph.value/100*Math.PI/2;morphValue.value=`η ${(torusEta*180/Math.PI).toFixed(1)}°`;updateTorusGeometry();requestRender()}
-morph.addEventListener('input',()=>{cancelAnimationFrame(morphSnapFrame);cancelAnimationFrame(morphFrame);morphFrame=requestAnimationFrame(updateTorusFromControl)});
-function glideTorusTo(target){
-  cancelAnimationFrame(morphSnapFrame);const start=+morph.value,started=performance.now(),duration=900;
-  function glide(now){const raw=Math.min(1,(now-started)/duration),t=raw<.5?4*raw*raw*raw:1-(-2*raw+2)**3/2;morph.value=start+(target-start)*t;updateTorusFromControl();if(raw<1)morphSnapFrame=requestAnimationFrame(glide)}
-  morphSnapFrame=requestAnimationFrame(glide);
-}
-morphStops.forEach(stop=>stop.addEventListener('click',()=>glideTorusTo(+stop.dataset.morphStop)));
 const projectionControl=document.querySelector('#projection-point'),projectionStops=[...document.querySelectorAll('[data-projection-stop]')];let projectionFrame=0,projectionSnapFrame=0,lastPolytopeProjection=0;
 function updateOverviewProjection(forcePolytope=false){
   const amount=+projectionControl.value/100,angle=amount*Math.PI/2,c=Math.cos(angle),s=Math.sin(angle);

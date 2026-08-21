@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=rotatable-hopf-base-tubes">
+  <link rel="stylesheet" href="./style.css?v=hopf-sphere-torus-control">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -50,15 +50,6 @@
           <input id="opacity" type="range" min="5" max="65" value="26">
         </div>
       </aside>
-      <div class="morph-dock" aria-label="Torus morph control">
-        <input id="morph" type="range" min="0" max="100" step="0.1" value="35.2" aria-label="Morph torus from z-axis to equatorial circle">
-        <div class="morph-stops">
-          <button type="button" data-morph-stop="100" aria-label="Equatorial core circle"></button>
-          <button type="button" data-morph-stop="50" aria-label="Balanced Clifford torus"></button>
-          <button type="button" data-morph-stop="0" aria-label="Axial core circle"></button>
-        </div>
-        <span class="sr-only"><output id="morph-value">η 31.7°</output><output id="intersection-count">24</output><span id="intersection-label">CIRCLES IN TWO RULINGS</span></span>
-      </div>
       <div class="projection-dock" aria-label="Stereographic projection point control">
         <input id="projection-point" type="range" min="0" max="100" step="0.1" value="0" aria-label="Move the stereographic pole between the two core circles">
         <div class="projection-stops">
@@ -67,13 +58,15 @@
           <button type="button" data-projection-stop="100" aria-label="Projection pole on the second core circle"></button>
         </div>
       </div>
-      <div class="hopf-base-control" id="hopf-base-control" aria-label="Hopf base sphere selector">
-        <svg id="hopf-base" viewBox="-1.12 -1.12 2.24 2.24" role="application" tabindex="0" aria-label="Drag the sphere to rotate it, or drag the blue point to select a Hopf fiber">
+      <div class="hopf-base-control" id="hopf-base-control" aria-label="Hopf base sphere and torus controller">
+        <svg id="hopf-base" viewBox="-1.12 -1.12 2.24 2.24" role="application" tabindex="0" aria-label="Drag the sphere to rotate it; drag the blue point to select a fiber and its torus">
           <defs><radialGradient id="base-dome" cx="34%" cy="28%" r="72%"><stop offset="0" stop-color="#ffffff" stop-opacity=".76"/><stop offset="1" stop-color="#7fa2e8" stop-opacity=".28"/></radialGradient></defs>
           <circle class="base-dome" r="1" fill="url(#base-dome)"/>
           <path class="base-grid" id="base-grid-x"/>
           <path class="base-grid" id="base-grid-y"/>
           <path class="base-grid base-arc" id="base-grid-z"/>
+          <path class="base-torus-circle base-torus-back" id="hopf-torus-back"/>
+          <path class="base-torus-circle base-torus-front" id="hopf-torus-front"/>
           <circle class="base-pole base-pole-a" id="hopf-pole-north" data-pole="north" r=".066"/>
           <circle class="base-pole base-pole-b" id="hopf-pole-south" data-pole="south" r=".066"/>
           <circle class="base-point-halo" id="hopf-base-halo" r=".13"/>
@@ -84,6 +77,6 @@
     </section>
 
   </main>
-  <script type="module" src="./app.js?v=rotatable-hopf-base-tubes"></script>
+  <script type="module" src="./app.js?v=hopf-sphere-torus-control"></script>
 </body>
 </html>

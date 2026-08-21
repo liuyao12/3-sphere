@@ -391,15 +391,17 @@ groups.extremes.visible=false;groups.hopf.visible=false;groups.cell.visible=fals
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
 const hopfBaseControl=document.querySelector('#hopf-base-control'),hopfBase=document.querySelector('#hopf-base'),hopfBasePoint=document.querySelector('#hopf-base-point'),hopfBaseHalo=document.querySelector('#hopf-base-halo');
-const hopfPoleNorth=document.querySelector('#hopf-pole-north'),hopfPoleSouth=document.querySelector('#hopf-pole-south'),hopfGridPaths=[document.querySelector('#base-grid-x'),document.querySelector('#base-grid-y'),document.querySelector('#base-grid-z')],hopfTorusFront=document.querySelector('#hopf-torus-front'),hopfTorusBack=document.querySelector('#hopf-torus-back');
-const hopfBaseVector=new THREE.Vector3(Math.sin(2*torusEta)*Math.cos(-.62),Math.sin(2*torusEta)*Math.sin(-.62),Math.cos(2*torusEta));
+const hopfPoleNorth=document.querySelector('#hopf-pole-north'),hopfPoleSouth=document.querySelector('#hopf-pole-south'),hopfGridPaths=[document.querySelector('#base-grid-x'),document.querySelector('#base-grid-y'),document.querySelector('#base-grid-z')],hopfTorusFront=document.querySelector('#hopf-torus-front'),hopfTorusBack=document.querySelector('#hopf-torus-back'),hopfTorusHandle=document.querySelector('#hopf-torus-handle'),hopfTorusHandleHit=document.querySelector('#hopf-torus-handle-hit');
+const hopfBaseVector=new THREE.Vector3(Math.sqrt(1-.42**2)*Math.cos(-.62),Math.sqrt(1-.42**2)*Math.sin(-.62),.42);
 const hopfBaseOrientation=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-Math.PI/2),hopfDragStartOrientation=new THREE.Quaternion(),hopfDragStartVector=new THREE.Vector3(),hopfDragDelta=new THREE.Quaternion();
-let hopfDragMode='',hopfSelectionFrame=0;
+let hopfDragMode='',hopfSelectionFrame=0,torusSelectionFrame=0;
 function basePath(pointAt){let path='';for(let i=0;i<=96;i++){const p=pointAt(i/96*Math.PI*2).applyQuaternion(hopfBaseOrientation);path+=`${i?'L':'M'}${p.x.toFixed(4)},${(-p.y).toFixed(4)}`}return path}
 function updateHopfTorusCircle(){
-  const z=THREE.MathUtils.clamp(hopfBaseVector.z,-1,1),radius=Math.sqrt(Math.max(0,1-z*z));let front='',back='',previousSide='';
-  for(let i=0;i<=128;i++){const t=i/128*Math.PI*2,p=new THREE.Vector3(radius*Math.cos(t),radius*Math.sin(t),z).applyQuaternion(hopfBaseOrientation),side=p.z>=0?'front':'back',command=side===previousSide?'L':'M',part=`${command}${p.x.toFixed(4)},${(-p.y).toFixed(4)}`;if(side==='front')front+=part;else back+=part;previousSide=side}
+  const z=Math.cos(2*torusEta),radius=Math.sqrt(Math.max(0,1-z*z));let front='',back='',previousSide='',handlePoint=null;
+  for(let i=0;i<=128;i++){const t=i/128*Math.PI*2,p=new THREE.Vector3(radius*Math.cos(t),radius*Math.sin(t),z).applyQuaternion(hopfBaseOrientation),side=p.z>=0?'front':'back',command=side===previousSide?'L':'M',part=`${command}${p.x.toFixed(4)},${(-p.y).toFixed(4)}`;if(side==='front')front+=part;else back+=part;previousSide=side;if(!handlePoint||p.z>handlePoint.z)handlePoint=p}
   hopfTorusFront.setAttribute('d',front);hopfTorusBack.setAttribute('d',back);
+  for(const handle of[hopfTorusHandle,hopfTorusHandleHit]){handle.setAttribute('cx',handlePoint.x);handle.setAttribute('cy',-handlePoint.y)}
+  hopfTorusHandle.setAttribute('aria-valuenow',z.toFixed(3));
 }
 function updateHopfBaseDisplay(){
   const display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);
@@ -412,8 +414,12 @@ function updateHopfBaseDisplay(){
   updateHopfTorusCircle();
 }
 function setHopfBaseVector(vector){
-  hopfBaseVector.copy(vector).normalize();torusEta=.5*Math.acos(THREE.MathUtils.clamp(hopfBaseVector.z,-1,1));updateHopfBaseDisplay();cancelAnimationFrame(hopfSelectionFrame);
-  hopfSelectionFrame=requestAnimationFrame(()=>{if(visualMode==='hopf')updateSelectedHopfFiber(hopfBaseVector);if(!walkView)updateTorusGeometry();requestRender()});
+  hopfBaseVector.copy(vector).normalize();updateHopfBaseDisplay();cancelAnimationFrame(hopfSelectionFrame);
+  hopfSelectionFrame=requestAnimationFrame(()=>{if(visualMode==='hopf')updateSelectedHopfFiber(hopfBaseVector);requestRender()});
+}
+function setTorusLatitude(z){
+  torusEta=.5*Math.acos(THREE.MathUtils.clamp(z,-1,1));updateHopfBaseDisplay();cancelAnimationFrame(torusSelectionFrame);
+  torusSelectionFrame=requestAnimationFrame(()=>{if(!walkView)updateTorusGeometry();requestRender()});
 }
 function hopfScreenPoint(event){const rect=hopfBase.getBoundingClientRect();return new THREE.Vector2((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12))}
 function hopfTrackball(point){const vector=new THREE.Vector3(point.x,point.y,0),r2=vector.x*vector.x+vector.y*vector.y;if(r2>1)vector.multiplyScalar(1/Math.sqrt(r2));else vector.z=Math.sqrt(1-r2);return vector}
@@ -422,16 +428,19 @@ function setHopfBaseFromScreen(point){
   for(const[pole,display]of displayedPoles)if(Math.hypot(point.x-display.x,point.y-display.y)<.11){setHopfBaseVector(pole);return}
   const display=hopfTrackball(point),inverse=hopfBaseOrientation.clone().invert();setHopfBaseVector(display.applyQuaternion(inverse));
 }
+function setTorusFromScreen(point){const display=hopfTrackball(point),inverse=hopfBaseOrientation.clone().invert();setTorusLatitude(display.applyQuaternion(inverse).z)}
 hopfBase.addEventListener('pointerdown',event=>{
   const point=hopfScreenPoint(event),pole=event.target.closest?.('[data-pole]');hopfBase.setPointerCapture(event.pointerId);hopfBase.classList.add('dragging');
-  if(pole){hopfDragMode='point';setHopfBaseVector(new THREE.Vector3(0,0,pole.dataset.pole==='north'?1:-1))}
+  if(event.target===hopfTorusHandle||event.target===hopfTorusHandleHit){hopfDragMode='torus';setTorusFromScreen(point)}
+  else if(pole){hopfDragMode='point';setHopfBaseVector(new THREE.Vector3(0,0,pole.dataset.pole==='north'?1:-1))}
   else if(event.target===hopfBasePoint||event.target===hopfBaseHalo){hopfDragMode='point';setHopfBaseFromScreen(point)}
   else{hopfDragMode='sphere';hopfDragStartVector.copy(hopfTrackball(point));hopfDragStartOrientation.copy(hopfBaseOrientation)}
 });
-hopfBase.addEventListener('pointermove',event=>{if(!hopfBase.hasPointerCapture(event.pointerId))return;const point=hopfScreenPoint(event);if(hopfDragMode==='point')setHopfBaseFromScreen(point);else if(hopfDragMode==='sphere'){hopfDragDelta.setFromUnitVectors(hopfDragStartVector,hopfTrackball(point));hopfBaseOrientation.copy(hopfDragDelta).multiply(hopfDragStartOrientation).normalize();updateHopfBaseDisplay()}});
+hopfBase.addEventListener('pointermove',event=>{if(!hopfBase.hasPointerCapture(event.pointerId))return;const point=hopfScreenPoint(event);if(hopfDragMode==='point')setHopfBaseFromScreen(point);else if(hopfDragMode==='torus')setTorusFromScreen(point);else if(hopfDragMode==='sphere'){hopfDragDelta.setFromUnitVectors(hopfDragStartVector,hopfTrackball(point));hopfBaseOrientation.copy(hopfDragDelta).multiply(hopfDragStartOrientation).normalize();updateHopfBaseDisplay()}});
 function endHopfDrag(event){hopfDragMode='';hopfBase.classList.remove('dragging');if(hopfBase.hasPointerCapture(event.pointerId))hopfBase.releasePointerCapture(event.pointerId)}
 hopfBase.addEventListener('pointerup',endHopfDrag);hopfBase.addEventListener('pointercancel',endHopfDrag);
 hopfBase.addEventListener('keydown',event=>{const step=event.shiftKey ? .1 : .035,display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);if(event.key==='ArrowLeft')display.x-=step;else if(event.key==='ArrowRight')display.x+=step;else if(event.key==='ArrowUp')display.y+=step;else if(event.key==='ArrowDown')display.y-=step;else return;setHopfBaseFromScreen(display);event.preventDefault()});
+hopfTorusHandle.addEventListener('keydown',event=>{const step=event.shiftKey?.1:.035,z=Math.cos(2*torusEta);if(event.key==='ArrowUp'||event.key==='ArrowRight')setTorusLatitude(z+step);else if(event.key==='ArrowDown'||event.key==='ArrowLeft')setTorusLatitude(z-step);else return;event.stopPropagation();event.preventDefault()});
 updateHopfBaseDisplay();updateSelectedHopfFiber(hopfBaseVector);
 const publicModeNames={hopf:'hopf',cell600:'600-cell',cell120:'120-cell'};
 const internalModeNames={hopf:'hopf','600-cell':'cell600','120-cell':'cell120'};

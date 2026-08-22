@@ -109,12 +109,12 @@ function projectedCorePaths(axisA,axisB,steps=360){
   }
   flush();return paths;
 }
-function buildCoreTube(group,axisA,axisB,material){
+function buildCoreTube(group,axisA,axisB,material,radius=.065){
   clearTubeGroup(group);
   for(const points of projectedCorePaths(axisA,axisB)){
     const closed=points.length>12&&points[0].distanceTo(points.at(-1))<.08;if(closed)points.pop();
-    const curve=new THREE.CatmullRomCurve3(points,closed,'centripetal'),tube=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(12,points.length-1),.065,10,closed),material);tube.renderOrder=5;group.add(tube);
-    if(!closed)for(const point of[points[0],points.at(-1)]){const cap=new THREE.Mesh(new THREE.SphereGeometry(.065,10,7),material);cap.position.copy(point);cap.renderOrder=5;group.add(cap)}
+    const curve=new THREE.CatmullRomCurve3(points,closed,'centripetal'),tube=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(12,points.length-1),radius,10,closed),material);tube.renderOrder=5;group.add(tube);
+    if(!closed)for(const point of[points[0],points.at(-1)]){const cap=new THREE.Mesh(new THREE.SphereGeometry(radius,10,7),material);cap.position.copy(point);cap.renderOrder=5;group.add(cap)}
   }
 }
 function rebuildExtremes(){
@@ -193,10 +193,7 @@ function hopfFiberPoint(eta,delta,t){return basisU.map((_,i)=>
 const ambientHopfFibers=new THREE.LineSegments(
   new THREE.BufferGeometry(),
   new THREE.LineBasicMaterial({color:0x6846c7,transparent:true,opacity:.2,depthWrite:false})
-),selectedHopfFiber=new THREE.LineSegments(
-  new THREE.BufferGeometry(),
-  new THREE.LineBasicMaterial({color:0x245bd6,transparent:true,opacity:1,depthWrite:false})
-);
+),selectedHopfFiber=new THREE.Group(),selectedHopfMaterial=new THREE.MeshPhongMaterial({color:0x245bd6,transparent:true,opacity:1,depthWrite:true,shininess:70});
 groups.hopf.add(ambientHopfFibers);groups.selectedFiber.add(selectedHopfFiber);
 function rebuildAmbientHopf(){
   const points=[];
@@ -207,15 +204,9 @@ function rebuildAmbientHopf(){
   ambientHopfFibers.geometry.dispose();ambientHopfFibers.geometry=new THREE.BufferGeometry().setFromPoints(points);
 }
 function updateSelectedHopfFiber(base){
-  const eta=.5*Math.acos(THREE.MathUtils.clamp(base.z,-1,1)),delta=Math.atan2(base.y,base.x),points=[];
-  let previous=null;
-  for(let step=0;step<=720;step++){
-    const t=step/720*Math.PI*2,p=project(hopfFiberPoint(eta,delta,t));
-    if(previous&&segmentVisible(previous,p))points.push(previous,p);
-    previous=p;
-  }
-  selectedHopfFiber.geometry.dispose();
-  selectedHopfFiber.geometry=new THREE.BufferGeometry().setFromPoints(points);
+  const eta=.5*Math.acos(THREE.MathUtils.clamp(base.z,-1,1)),delta=Math.atan2(base.y,base.x),c=Math.cos(eta),s=Math.sin(eta),cd=Math.cos(delta),sd=Math.sin(delta);
+  const axisA=basisU.map((value,i)=>c*value+s*(cd*basisN[i]+sd*basisM[i])),axisB=basisV.map((value,i)=>c*value+s*(-sd*basisN[i]+cd*basisM[i]));
+  buildCoreTube(selectedHopfFiber,axisA,axisB,selectedHopfMaterial,.0325);
 }
 rebuildAmbientHopf();
 function colorGraph(count,edges){const neighbors=Array.from({length:count},()=>new Set());for(const[a,b]of edges){neighbors[a].add(b);neighbors[b].add(a)}const colors=Array(count).fill(-1);for(let done=0;done<count;done++){let pick=-1,bestSat=-1,bestDegree=-1;for(let i=0;i<count;i++)if(colors[i]<0){const sat=new Set([...neighbors[i]].map(n=>colors[n]).filter(c=>c>=0)).size,degree=neighbors[i].size;if(sat>bestSat||sat===bestSat&&degree>bestDegree){pick=i;bestSat=sat;bestDegree=degree}}const used=new Set([...neighbors[pick]].map(n=>colors[n]).filter(c=>c>=0));let color=0;while(used.has(color))color++;colors[pick]=color}return colors}

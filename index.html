@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f7fb">
-  <meta name="description" content="An interactive stereographic projection of S³ with its Hopf fibration, Clifford torus, and 600-cell decomposition.">
+  <meta name="description" content="An interactive stereographic atlas of S³ with its Hopf fibration, Clifford torus, 4-simplex, 600-cell, and 120-cell.">
   <title>Seeing the 3-sphere, from within</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=fiber-cell-highlights">
+  <link rel="stylesheet" href="./style.css?v=four-simplex">
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"}}
   </script>
@@ -36,11 +36,12 @@
 
       <aside class="controls" aria-label="Visualization layers" tabindex="0">
         <button class="sidebar-trigger" id="sidebar-trigger" type="button" aria-expanded="false"><span id="sidebar-mode">HOPF MODE</span><b>›</b></button>
-        <p class="panel-kicker">THREE VIEWS</p>
+        <p class="panel-kicker">FOUR VIEWS</p>
         <div class="mode-picker" role="radiogroup" aria-label="Structure dividing the torus">
           <label class="mode-row"><input type="radio" name="view-mode" value="hopf" checked><i>01</i><span><b>Hopf fibration</b><small>One family through S³; two on the torus</small></span></label>
-          <label class="mode-row"><input type="radio" name="view-mode" value="cell600"><i>02</i><span><b>600-cell</b><small>Full tetrahedral complex</small></span></label>
-          <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>03</i><span><b>120-cell</b><small>Full dodecahedral complex</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="simplex"><i>02</i><span><b>4-simplex</b><small>Five tetrahedra on S³</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="cell600"><i>03</i><span><b>600-cell</b><small>Full tetrahedral complex</small></span></label>
+          <label class="mode-row"><input type="radio" name="view-mode" value="cell120"><i>04</i><span><b>120-cell</b><small>Full dodecahedral complex</small></span></label>
         </div>
         <p class="grid-description" id="grid-description">Hopf rulings · 12 + 12 circles</p>
         <button class="walk-toggle" id="walk-toggle" type="button">INSIDE VIEW</button>
@@ -79,6 +80,6 @@
     </section>
 
   </main>
-  <script type="module" src="./app.js?v=fiber-cell-highlights"></script>
+  <script type="module" src="./app.js?v=four-simplex"></script>
 </body>
 </html>

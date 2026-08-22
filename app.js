@@ -20,7 +20,7 @@ function requestRender(){if(!renderFrameId)renderFrameId=requestAnimationFrame(r
 function renderScene(){renderFrameId=0;const moving=!walkView&&controls.update();renderer.render(scene,camera);if(moving)requestRender()}
 controls.addEventListener('change',requestRender);
 
-const groups={torus:new THREE.Group(),extremes:new THREE.Group(),hopf:new THREE.Group(),selectedFiber:new THREE.Group(),cell:new THREE.Group(),cell120:new THREE.Group(),walk:new THREE.Group()};
+const groups={torus:new THREE.Group(),extremes:new THREE.Group(),hopf:new THREE.Group(),selectedFiber:new THREE.Group(),simplex:new THREE.Group(),cell:new THREE.Group(),cell120:new THREE.Group(),walk:new THREE.Group()};
 Object.values(groups).forEach(g=>scene.add(g));
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const norm=a=>Math.sqrt(dot(a,a));
@@ -135,8 +135,16 @@ const primalEdgeCells=new Map();
 poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
 function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
 const cell120WallRecords=[...primalEdgeCells.entries()].map(([key,ids])=>({face:orderPentagon(ids),owners:key.split(',').map(Number)})).filter(record=>record.face.length===5);
+function makeSimplex4(){
+  const basis=Array.from({length:4},(_,k)=>Array.from({length:5},(_,i)=>i<=k?1/Math.sqrt((k+1)*(k+2)):i===k+1?-(k+1)/Math.sqrt((k+1)*(k+2)):0));
+  const vertices=Array.from({length:5},(_,i)=>normalize(basis.map(axis=>axis[i]))),cells=Array.from({length:5},(_,omitted)=>[0,1,2,3,4].filter(id=>id!==omitted));
+  const centers=vertices.map(vertex=>vertex.map(value=>-value)),edges=[],wallRecords=[];
+  for(let i=0;i<5;i++)for(let j=i+1;j<5;j++){edges.push([i,j]);wallRecords.push({face:[0,1,2,3,4].filter(id=>id!==i&&id!==j),owners:[i,j]})}
+  return{vertices,cells,centers,edges,wallRecords};
+}
+const simplex4=makeSimplex4();
 let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10)),fiberRevision=0;
-const projectedPolytopeRevision={cell600:'',cell120:''};
+const projectedPolytopeRevision={simplex:'',cell600:'',cell120:''};
 function clearProjectionGroup(group){const geometries=new Set();while(group.children.length){const child=group.children.pop();if(child.geometry)geometries.add(child.geometry);if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose()}geometries.forEach(geometry=>geometry.dispose())}
 function projectedPointCloud(vertices,radius,color,opacity,segments){
   const points=vertices.map(project).filter(projectionVisible),geometry=new THREE.SphereGeometry(radius,segments,segments),material=new THREE.MeshBasicMaterial({color,transparent:true,opacity}),mesh=new THREE.InstancedMesh(geometry,material,points.length),matrix=new THREE.Matrix4();
@@ -144,7 +152,7 @@ function projectedPointCloud(vertices,radius,color,opacity,segments){
 }
 function orientTrianglesToward(positions,target){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,mx=(ax+bx+cx)/3,my=(ay+by+cy)/3,mz=(az+bz+cz)/3;if(nx*(target.x-mx)+ny*(target.y-my)+nz*(target.z-mz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
 function selectedFiberCellHits(mode){
-  const centers=mode==='cell600'?dualVertices:poly.v,hits=Array(centers.length).fill(false),samples=mode==='cell600'?2400:1200;
+  const centers=mode==='simplex'?simplex4.centers:mode==='cell600'?dualVertices:poly.v,hits=Array(centers.length).fill(false),samples=mode==='cell600'?2400:mode==='cell120'?1200:600;
   const eta=.5*Math.acos(THREE.MathUtils.clamp(hopfBaseVector.z,-1,1)),delta=Math.atan2(hopfBaseVector.y,hopfBaseVector.x);
   for(let step=0;step<samples;step++){
     const q=hopfFiberPoint(eta,delta,step/samples*Math.PI*2);let best=-Infinity,second=-Infinity,bestId=0,secondId=0;
@@ -154,20 +162,22 @@ function selectedFiberCellHits(mode){
   return hits;
 }
 function coloredSharedWalls(mode,hits){
-  const vertices=mode==='cell600'?poly.v:dualVertices,records=mode==='cell600'?cell600WallRecords:cell120WallRecords,centers=mode==='cell600'?dualVertices:poly.v,buckets=new Map();
+  const vertices=mode==='simplex'?simplex4.vertices:mode==='cell600'?poly.v:dualVertices,records=mode==='simplex'?simplex4.wallRecords:mode==='cell600'?cell600WallRecords:cell120WallRecords,centers=mode==='simplex'?simplex4.centers:mode==='cell600'?dualVertices:poly.v,buckets=new Map();
   for(const{face,owners}of records){const[a,b]=owners,colorA=cellColorings[mode][a],colorB=cellColorings[mode][b],hitA=hits[a],hitB=hits[b],key=`${hitA?1:0}:${colorA}|${hitB?1:0}:${colorB}`;if(!buckets.has(key))buckets.set(key,[]);const facePositions=[];appendCheckerFacePositions(facePositions,vertices,[face],hitA||hitB?3:2);const target=project(centers[a]);if(projectionVisible(target))orientTrianglesToward(facePositions,target);else orientProjectedTriangles(facePositions);buckets.get(key).push(...facePositions)}
   const meshes=[];
   for(const[key,positions]of buckets){const[left,right]=key.split('|'),[hitA,colorA]=left.split(':').map(Number),[hitB,colorB]=right.split(':').map(Number),geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));const front=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:walkPalettes[mode][colorA],transparent:true,opacity:hitA?.34:.014,side:THREE.FrontSide,depthWrite:false})),back=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:walkPalettes[mode][colorB],transparent:true,opacity:hitB?.34:.014,side:THREE.BackSide,depthWrite:false}));front.renderOrder=hitA?2:0;back.renderOrder=hitB?2:0;meshes.push(front,back)}
   return meshes;
 }
 function wallEdgeLayers(mode,hits){
-  const vertices=mode==='cell600'?poly.v:dualVertices,records=mode==='cell600'?cell600WallRecords:cell120WallRecords,all=new Map(),strong=new Map();
+  const vertices=mode==='simplex'?simplex4.vertices:mode==='cell600'?poly.v:dualVertices,records=mode==='simplex'?simplex4.wallRecords:mode==='cell600'?cell600WallRecords:cell120WallRecords,all=new Map(),strong=new Map();
   for(const{face,owners}of records)for(let i=0;i<face.length;i++){const a=face[i],b=face[(i+1)%face.length],key=a<b?`${a},${b}`:`${b},${a}`,pair=a<b?[a,b]:[b,a];all.set(key,pair);if(owners.some(owner=>hits[owner]))strong.set(key,pair)}
   const base=projectedSegments(vertices,[...all.values()],0x31465c,.16),accent=projectedSegments(vertices,[...strong.values()],0x24384f,.62);base.renderOrder=3;accent.renderOrder=4;return[base,accent];
 }
 function ensureProjectedPolytope(mode){
-  const revision=`${overviewProjectionRevision}:${fiberRevision}`;if(mode!=='cell600'&&mode!=='cell120'||projectedPolytopeRevision[mode]===revision)return;
-  if(mode==='cell600'){
+  const revision=`${overviewProjectionRevision}:${fiberRevision}`;if(!['simplex','cell600','cell120'].includes(mode)||projectedPolytopeRevision[mode]===revision)return;
+  if(mode==='simplex'){
+    const hits=selectedFiberCellHits(mode);clearProjectionGroup(groups.simplex);groups.simplex.add(...coloredSharedWalls(mode,hits),...wallEdgeLayers(mode,hits),projectedPointCloud(simplex4.vertices,.055,0x64748b,.3,8));
+  }else if(mode==='cell600'){
     const hits=selectedFiberCellHits(mode);clearProjectionGroup(groups.cell);groups.cell.add(...coloredSharedWalls(mode,hits),...wallEdgeLayers(mode,hits),projectedPointCloud(poly.v,.03,0x64748b,.16,6));
   }else{
     const hits=selectedFiberCellHits(mode);clearProjectionGroup(groups.cell120);groups.cell120.add(...coloredSharedWalls(mode,hits),...wallEdgeLayers(mode,hits),projectedPointCloud(dualVertices,.018,0x64748b,.12,5));
@@ -214,12 +224,12 @@ const torusPalettes={hopf:[0x245bd6,0x7255d9]};
 // the 600-cell's vertex set. They therefore color the 120 dodecahedral cells
 // of the dual 120-cell with no equal colors across a shared face.
 const cell120NaturalColoring=[2,2,4,4,0,0,3,3,2,2,3,0,4,3,4,0,0,4,3,4,0,3,2,2,4,4,1,2,2,1,4,4,3,3,1,2,2,1,3,3,0,0,1,2,2,1,0,0,4,1,2,2,2,2,1,4,0,1,2,2,2,2,1,0,3,1,2,2,2,2,1,3,4,4,3,1,1,3,4,4,0,0,4,1,1,4,0,0,3,3,0,1,1,0,3,3,1,0,4,4,4,4,0,1,1,3,0,0,0,0,3,1,1,4,3,3,3,3,4,1];
-const cellColorings={cell600:colorGraph(dualVertices.length,dualEdges),cell120:cell120NaturalColoring};
+const cellColorings={simplex:[0,1,2,3,4],cell600:colorGraph(dualVertices.length,dualEdges),cell120:cell120NaturalColoring};
 function verifyCellColoring(mode,edges){const colors=cellColorings[mode];if(edges.some(([a,b])=>colors[a]===colors[b]))throw new Error(`${mode} cell coloring has adjacent duplicates`)}
-verifyCellColoring('cell600',dualEdges);verifyCellColoring('cell120',poly.edges);
-const walkPalettes={cell600:[0x245bd6,0x008f95,0x7656d4,0x16845f],cell120:[0x245bd6,0x008f95,0x7656d4,0x16845f,0xad3f9b]};
+verifyCellColoring('simplex',simplex4.edges);verifyCellColoring('cell600',dualEdges);verifyCellColoring('cell120',poly.edges);
+const walkPalettes={simplex:[0x245bd6,0x008f95,0x7656d4,0x16845f,0xad3f9b],cell600:[0x245bd6,0x008f95,0x7656d4,0x16845f],cell120:[0x245bd6,0x008f95,0x7656d4,0x16845f,0xad3f9b]};
 function walkCellColor(mode,id){
-  const source=mode==='cell120'?'cell120':'cell600',colorIndex=cellColorings[source][id],palette=walkPalettes[source];
+  const source=mode==='simplex'?'simplex':mode==='cell120'?'cell120':'cell600',colorIndex=cellColorings[source][id],palette=walkPalettes[source];
   if(colorIndex<palette.length)return palette[colorIndex];
   return new THREE.Color().setHSL((colorIndex*.61803398875)%1,.68,.48).getHex();
 }
@@ -277,7 +287,7 @@ function buildTorusCheckerboard(){
   torusRulingA.geometry=new THREE.BufferGeometry().setFromPoints(rulings[0]);
   torusRulingB.geometry.dispose();
   torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);
-  document.querySelector('#grid-description').textContent=visualMode==='hopf'?`${AMBIENT_HOPF_COUNT} fibers through S³ · 12 + 12 on torus`:`Full ${visualMode==='cell120'?'120':'600'}-cell · selected-fiber cells emphasized`;
+  document.querySelector('#grid-description').textContent=visualMode==='hopf'?`${AMBIENT_HOPF_COUNT} fibers through S³ · 12 + 12 on torus`:visualMode==='simplex'?'4-simplex · 5 tetrahedral cells':`Full ${visualMode==='cell120'?'120':'600'}-cell · selected-fiber cells emphasized`;
 }
 function updateLimitCurves(){groups.extremes.visible=true}
 function updateTorusGeometry(){buildTorusCheckerboard();updateLimitCurves()}
@@ -286,30 +296,32 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new 
 // A cell-centered atlas. The projection pole is kept antipodal to the current
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
-let walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
+let walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
 const insideStartQuaternion=new THREE.Quaternion(),insideDeltaQuaternion=new THREE.Quaternion(),insideGrabDirection=new THREE.Vector3(),insideCandidateDirection=new THREE.Vector3();
 const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');
 function nearestCenter(centers,target){let best=0,score=-Infinity;for(let i=0;i<centers.length;i++){const s=dot(centers[i],target);if(s>score){score=s;best=i}}return best}
 const initialChartCenter=overviewPole.map(x=>-x);
-walkCell600=nearestCenter(dualVertices,initialChartCenter);walkCell120=nearestCenter(poly.v,initialChartCenter);
+walkCellSimplex=nearestCenter(simplex4.centers,initialChartCenter);walkCell600=nearestCenter(dualVertices,initialChartCenter);walkCell120=nearestCenter(poly.v,initialChartCenter);
 function disposeGroup(group){const geometries=new Set();while(group.children.length){const child=group.children.pop();if(child.geometry)geometries.add(child.geometry);if(Array.isArray(child.material))child.material.forEach(m=>m.dispose());else child.material?.dispose()}geometries.forEach(geometry=>geometry.dispose())}
 function faceNeighbor600(cellId,face){const owners=dualFaceMap.get([...face].sort((x,y)=>x-y).join(','));return owners?.find(id=>id!==cellId)}
 const cell600Adjacency=Array.from({length:poly.cells.length},()=>new Set());for(const[a,b]of dualEdges){cell600Adjacency[a].add(b);cell600Adjacency[b].add(a)}
-function walkNeighbors(mode,id){return mode==='cell120'?[...poly.adjacency[id]]:[...cell600Adjacency[id]]}
+function walkNeighbors(mode,id){return mode==='simplex'?[0,1,2,3,4].filter(candidate=>candidate!==id):mode==='cell120'?[...poly.adjacency[id]]:[...cell600Adjacency[id]]}
 function walkCellFaces(mode,id){
+  if(mode==='simplex')return simplex4.cells[id].map(removed=>({neighbor:removed,vertices:simplex4.vertices,face:simplex4.cells[id].filter(vertex=>vertex!==removed)}));
   if(mode==='cell120')return walkNeighbors(mode,id).map(neighbor=>({neighbor,vertices:dualVertices,face:orderPentagon(primalEdgeCells.get([id,neighbor].sort((x,y)=>x-y).join(',')))}));
   const cell=poly.cells[id];return cell.map((_,k)=>{const face=cell.filter((__,j)=>j!==k);return{neighbor:faceNeighbor600(id,face),vertices:poly.v,face}});
 }
+function currentWalkCellId(){return visualMode==='simplex'?walkCellSimplex:visualMode==='cell120'?walkCell120:walkCell600}
 function walkFaces(){
-  return walkCellFaces(visualMode,visualMode==='cell120'?walkCell120:walkCell600);
+  return walkCellFaces(visualMode,currentWalkCellId());
 }
 function portalPatternGeometry(vertices,face){
   return checkerFaceGeometry(vertices,[face],6);
 }
 function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
-  const faces=walkFaces(),currentId=visualMode==='cell120'?walkCell120:walkCell600,currentColor=walkCellColor(visualMode,currentId);
+  const faces=walkFaces(),currentId=currentWalkCellId(),currentColor=walkCellColor(visualMode,currentId);
   const allPairs=[],seen=new Set();
   faces.forEach((entry,index)=>{
     // The face is one geometric sheet. Its tint previews the cell reached by
@@ -368,11 +380,11 @@ function rebuildChart(includeTorus=true){
   rebuildWalkCell();
   if(includeTorus)updateTorusGeometry();
 }
-function currentWalkCenter(){return visualMode==='cell120'?poly.v[walkCell120]:dualVertices[walkCell600]}
+function currentWalkCenter(){return visualMode==='simplex'?simplex4.centers[walkCellSimplex]:visualMode==='cell120'?poly.v[walkCell120]:dualVertices[walkCell600]}
 function enterWalkCell(neighbor){
   if(walkAnimating||neighbor===undefined)return;
   const startCenter=currentWalkCenter(),startAxes=projectionAxes.map(axis=>[...axis]);
-  if(visualMode==='cell120')walkCell120=neighbor;else walkCell600=neighbor;
+  if(visualMode==='simplex')walkCellSimplex=neighbor;else if(visualMode==='cell120')walkCell120=neighbor;else walkCell600=neighbor;
   const endCenter=currentWalkCenter(),started=performance.now();walkAnimating=true;hoveredPortal=null;
   function frame(now){
     const raw=Math.min(1,(now-started)/520),t=raw*raw*(3-2*raw),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
@@ -383,14 +395,14 @@ function enterWalkCell(neighbor){
   requestAnimationFrame(frame);
 }
 function writeViewUrl(action){
-  if(!action)return;const url=new URL(location.href);if(walkView){url.searchParams.set('view','walk');url.searchParams.set('cell',String(visualMode==='cell120'?walkCell120:walkCell600))}else{url.searchParams.delete('view');url.searchParams.delete('cell')}history[`${action}State`](null,'',url);
+  if(!action)return;const url=new URL(location.href);if(walkView){url.searchParams.set('view','walk');url.searchParams.set('cell',String(currentWalkCellId()))}else{url.searchParams.delete('view');url.searchParams.delete('cell')}history[`${action}State`](null,'',url);
 }
 function setWalkView(active,urlAction='push'){
-  walkView=active;document.body.classList.toggle('walking',active);walkToggle.setAttribute('aria-pressed',String(active));walkToggle.textContent=active?'OUTSIDE VIEW':'INSIDE VIEW';walkHint.hidden=!active;groups.walk.visible=active;groups.torus.visible=!active;groups.extremes.visible=!active;groups.selectedFiber.visible=!active;groups.cell.visible=!active&&visualMode==='cell600';groups.cell120.visible=!active&&visualMode==='cell120';
-  const label=visualMode==='hopf'?'HOPF':visualMode==='cell600'?'600-CELL':'120-CELL';modeLabel.textContent=`${label} · ${active?'INSIDE':'OUTSIDE'} VIEW`;
+  walkView=active;document.body.classList.toggle('walking',active);walkToggle.setAttribute('aria-pressed',String(active));walkToggle.textContent=active?'OUTSIDE VIEW':'INSIDE VIEW';walkHint.hidden=!active;groups.walk.visible=active;groups.torus.visible=!active;groups.extremes.visible=!active;groups.selectedFiber.visible=!active;groups.simplex.visible=!active&&visualMode==='simplex';groups.cell.visible=!active&&visualMode==='cell600';groups.cell120.visible=!active&&visualMode==='cell120';
+  const label=visualMode==='hopf'?'HOPF':visualMode==='simplex'?'4-SIMPLEX':visualMode==='cell600'?'600-CELL':'120-CELL';modeLabel.textContent=`${label} · ${active?'INSIDE':'OUTSIDE'} VIEW`;
   if(active){
     const requested=Number(new URL(location.href).searchParams.get('cell'));
-    if(Number.isInteger(requested)){if(visualMode==='cell120'&&requested>=0&&requested<120)walkCell120=requested;else if(visualMode!=='cell120'&&requested>=0&&requested<600)walkCell600=requested}
+    if(Number.isInteger(requested)){if(visualMode==='simplex'&&requested>=0&&requested<5)walkCellSimplex=requested;else if(visualMode==='cell120'&&requested>=0&&requested<120)walkCell120=requested;else if(visualMode==='cell600'&&requested>=0&&requested<600)walkCell600=requested}
     const center=currentWalkCenter(),baseAxis=tangentFrame(center,overviewAxes);setWalkChart(center,baseAxis);
     controls.enabled=false;camera.near=.015;camera.fov=72;camera.updateProjectionMatrix();rebuildChart(false);aimInsideAtFirstFace();
   }else{
@@ -419,7 +431,7 @@ renderer.domElement.addEventListener('pointermove',event=>{
 renderer.domElement.addEventListener('pointerup',event=>{insidePointer=false;renderer.domElement.style.cursor=hoveredPortal?'pointer':'grab';renderer.domElement.releasePointerCapture(event.pointerId);if(!walkView||walkAnimating||Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>5)return;const portal=portalAtEvent(event);if(portal)enterWalkCell(portal.userData.neighbor)});
 renderer.domElement.addEventListener('pointercancel',event=>{insidePointer=false;if(renderer.domElement.hasPointerCapture(event.pointerId))renderer.domElement.releasePointerCapture(event.pointerId);renderer.domElement.style.cursor=walkView?'grab':''});
 
-groups.extremes.visible=false;groups.hopf.visible=false;groups.selectedFiber.visible=false;groups.cell.visible=false;groups.cell120.visible=false;
+groups.extremes.visible=false;groups.hopf.visible=false;groups.selectedFiber.visible=false;groups.simplex.visible=false;groups.cell.visible=false;groups.cell120.visible=false;
 const modeLabel=document.querySelector('#mode-label'),sidebarMode=document.querySelector('#sidebar-mode');
 const modeInputs=[...document.querySelectorAll('input[name="view-mode"]')];
 const hopfBaseControl=document.querySelector('#hopf-base-control'),hopfBase=document.querySelector('#hopf-base'),hopfBasePoint=document.querySelector('#hopf-base-point'),hopfBaseHalo=document.querySelector('#hopf-base-halo');
@@ -451,7 +463,7 @@ function setHopfBaseVector(vector){
   clearTimeout(cellHighlightTimer);cellHighlightTimer=setTimeout(refreshCellHighlights,140);
 }
 let cellHighlightTimer=0;
-function refreshCellHighlights(){clearTimeout(cellHighlightTimer);if(!walkView&&(visualMode==='cell600'||visualMode==='cell120'))ensureProjectedPolytope(visualMode);requestRender()}
+function refreshCellHighlights(){clearTimeout(cellHighlightTimer);if(!walkView&&['simplex','cell600','cell120'].includes(visualMode))ensureProjectedPolytope(visualMode);requestRender()}
 function setTorusLatitude(z){
   torusEta=.5*Math.acos(THREE.MathUtils.clamp(z,-1,1));updateHopfBaseDisplay();cancelAnimationFrame(torusSelectionFrame);
   torusSelectionFrame=requestAnimationFrame(()=>{if(!walkView)updateTorusGeometry();requestRender()});
@@ -477,8 +489,8 @@ hopfBase.addEventListener('pointerup',endHopfDrag);hopfBase.addEventListener('po
 hopfBase.addEventListener('keydown',event=>{const step=event.shiftKey ? .1 : .035,display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);if(event.key==='ArrowLeft')display.x-=step;else if(event.key==='ArrowRight')display.x+=step;else if(event.key==='ArrowUp')display.y+=step;else if(event.key==='ArrowDown')display.y-=step;else return;setHopfBaseFromScreen(display);event.preventDefault()});
 hopfTorusHandle.addEventListener('keydown',event=>{const step=event.shiftKey?.1:.035,z=Math.cos(2*torusEta);if(event.key==='ArrowUp'||event.key==='ArrowRight')setTorusLatitude(z+step);else if(event.key==='ArrowDown'||event.key==='ArrowLeft')setTorusLatitude(z-step);else return;event.stopPropagation();event.preventDefault()});
 updateHopfBaseDisplay();updateSelectedHopfFiber(hopfBaseVector);
-const publicModeNames={hopf:'hopf',cell600:'600-cell',cell120:'120-cell'};
-const internalModeNames={hopf:'hopf','600-cell':'cell600','120-cell':'cell120'};
+const publicModeNames={hopf:'hopf',simplex:'4-simplex',cell600:'600-cell',cell120:'120-cell'};
+const internalModeNames={hopf:'hopf','4-simplex':'simplex','600-cell':'cell600','120-cell':'cell120'};
 function modeFromUrl(){return internalModeNames[new URL(location.href).searchParams.get('mode')]||'hopf'}
 function writeModeUrl(mode,action){
   if(!action)return;
@@ -488,8 +500,8 @@ function writeModeUrl(mode,action){
   history[`${action}State`](null,'',url);
 }
 function applyMode(mode,urlAction){
-  visualMode=mode;groups.hopf.visible=mode==='hopf';groups.selectedFiber.visible=!walkView;hopfBaseControl.hidden=false;groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
-  const label=mode==='hopf'?'HOPF':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — Seeing the 3-sphere, from within`;writeModeUrl(mode,urlAction);
+  visualMode=mode;groups.hopf.visible=mode==='hopf';groups.selectedFiber.visible=!walkView;hopfBaseControl.hidden=false;groups.simplex.visible=!walkView&&mode==='simplex';groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
+  const label=mode==='hopf'?'HOPF':mode==='simplex'?'4-SIMPLEX':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — Seeing the 3-sphere, from within`;writeModeUrl(mode,urlAction);
   if(walkView){const center=currentWalkCenter();setWalkChart(center,tangentFrame(center,projectionAxes));rebuildChart(false);writeViewUrl('replace')}else{ensureProjectedPolytope(mode);updateTorusGeometry()}
   requestRender();
 }
@@ -518,4 +530,4 @@ selectMode(modeFromUrl(),'replace');if(new URL(location.href).searchParams.get('
 
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(walkView){camera.position.set(0,0,0);camera.updateMatrixWorld()}else{controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update()}requestRender()}new ResizeObserver(resize).observe(stage);resize();
 requestRender();
-console.info(`600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges.`);
+console.info(`4-simplex: 5 vertices, 10 edges, 5 tetrahedra. 600-cell: ${poly.v.length} vertices, ${poly.edges.length} edges, ${poly.cells.length} tetrahedra. 120-cell: ${dualVertices.length} vertices, ${dualEdges.length} edges.`);

@@ -95,6 +95,56 @@ function checkerFaceGeometry(vertices,faces,subdivisions=6,tileDensity=1){
 }
 function checkerFaces(vertices,faces,color,opacity,subdivisions=5,tileDensity=1){return new THREE.Mesh(checkerFaceGeometry(vertices,faces,subdivisions,tileDensity),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
 
+const dot3=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross3=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],normalize3=a=>{const n=Math.hypot(...a);return a.map(value=>value/n)};
+function makeRhombicuboctahedron(){
+  const q=1+Math.sqrt(2),raw=[];
+  for(let long=0;long<3;long++)for(const sx of[-1,1])for(const sy of[-1,1])for(const sz of[-1,1]){const vertex=[sx,sy,sz];vertex[long]*=q;raw.push(vertex)}
+  const faceMap=new Map();
+  for(let a=0;a<raw.length;a++)for(let b=a+1;b<raw.length;b++)for(let c=b+1;c<raw.length;c++){
+    const normal=cross3(raw[b].map((value,i)=>value-raw[a][i]),raw[c].map((value,i)=>value-raw[a][i])),length=Math.hypot(...normal);if(length<1e-7)continue;
+    const offset=dot3(normal,raw[a]),distances=raw.map(vertex=>dot3(normal,vertex)-offset),minimum=Math.min(...distances),maximum=Math.max(...distances);if(minimum<-1e-7&&maximum>1e-7)continue;
+    const ids=distances.map((distance,id)=>Math.abs(distance)<1e-7?id:-1).filter(id=>id>=0);if(ids.length!==3&&ids.length!==4)continue;
+    const key=[...ids].sort((x,y)=>x-y).join(',');if(faceMap.has(key))continue;
+    const center=[0,1,2].map(k=>ids.reduce((sum,id)=>sum+raw[id][k],0)/ids.length),outward=normalize3(center),axisX=normalize3(raw[ids[0]].map((value,i)=>value-center[i])),axisY=cross3(outward,axisX);
+    ids.sort((i,j)=>Math.atan2(dot3(raw[i].map((value,k)=>value-center[k]),axisY),dot3(raw[i].map((value,k)=>value-center[k]),axisX))-Math.atan2(dot3(raw[j].map((value,k)=>value-center[k]),axisY),dot3(raw[j].map((value,k)=>value-center[k]),axisX)));
+    faceMap.set(key,ids);
+  }
+  return{raw,vertices:raw.map(normalize3),faces:[...faceMap.values()]};
+}
+const wallCurvaturePattern=makeRhombicuboctahedron(),wallPatternCache=new Map();
+function wallPatternTiles(density){
+  if(wallPatternCache.has(density))return wallPatternCache.get(density);const tiles=[];
+  const affine=(corners,weights)=>normalize3([0,1,2].map(k=>weights.reduce((sum,weight,i)=>sum+weight*corners[i][k],0)));
+  wallCurvaturePattern.faces.forEach((face,faceIndex)=>{
+    const corners=face.map(id=>wallCurvaturePattern.raw[id]);
+    if(face.length===4){
+      const point=(i,j)=>{const s=i/density,t=j/density;return affine(corners,[(1-s)*(1-t),s*(1-t),s*t,(1-s)*t])};
+      for(let i=0;i<density;i++)for(let j=0;j<density;j++)if(((i+j+faceIndex)&1)===0)tiles.push({points:[point(i,j),point(i+1,j),point(i+1,j+1),point(i,j+1)],shade:1});
+    }else{
+      const point=(i,j)=>affine(corners,[1-(i+j)/density,i/density,j/density]);
+      for(let i=0;i<density;i++)for(let j=0;j<density-i;j++){
+        tiles.push({points:[point(i,j),point(i+1,j),point(i,j+1)],shade:((i+j+faceIndex)&1)===0?.58:.76});
+        if(i+j<=density-2)tiles.push({points:[point(i+1,j),point(i+1,j+1),point(i,j+1)],shade:((i+j+faceIndex)&1)===0?.76:.58});
+      }
+    }
+  });
+  wallPatternCache.set(density,tiles);return tiles;
+}
+function mixedWallFaceGeometry(vertices,faces,quality=6,tileDensity=4){
+  const positions=[],colors=[],tiles=wallPatternTiles(tileDensity),anchor=new THREE.Vector3(...wallCurvaturePattern.vertices[0]);
+  for(const face of faces){
+    const basis=[];for(const id of face){let axis=[...vertices[id]];for(const previous of basis)axis=axis.map((value,i)=>value-dot(axis,previous)*previous[i]);if(norm(axis)>1e-6)basis.push(normalize(axis));if(basis.length===3)break}
+    const wall=face.map(id=>normalize3(basis.map(axis=>dot(vertices[id],axis)))),center=normalize3([0,1,2].map(k=>wall.reduce((sum,point)=>sum+point[k],0))),normals=wall.map((point,i)=>{let normal=cross3(point,wall[(i+1)%wall.length]);if(dot3(normal,center)<0)normal=normal.map(value=>-value);return normalize3(normal)}),rotation=new THREE.Quaternion().setFromUnitVectors(anchor,new THREE.Vector3(...center));
+    for(const tile of tiles){const rotated=tile.points.map(point=>new THREE.Vector3(...point).applyQuaternion(rotation).toArray());if(!rotated.every(point=>normals.every(normal=>dot3(normal,point)>=-1e-7)))continue;
+      const points=rotated.map(point=>normalize([0,1,2,3].map(k=>basis.reduce((sum,axis,i)=>sum+point[i]*axis[k],0)))),tileCenter=normalize([0,1,2,3].map(k=>points.reduce((sum,point)=>sum+point[k],0)));
+      const start=positions.length;
+      for(let i=0;i<points.length;i++)appendSphericalTriangle(positions,tileCenter,points[i],points[(i+1)%points.length],quality);
+      for(let i=start;i<positions.length;i+=3)colors.push(tile.shade,tile.shade,tile.shade);
+    }
+  }
+  orientProjectedTriangles(positions);const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();return geometry;
+}
+
 // A decagonal great circle fixes the coordinate splitting used by the torus.
 const a=0,b=[...poly.adjacency[a]][0],basisU=poly.v[a];
 let raw=poly.v[b].map((x,i)=>x-dot(poly.v[b],basisU)*basisU[i]);const basisV=normalize(raw);
@@ -297,7 +347,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new 
 // A cell-centered atlas. The projection pole is kept antipodal to the current
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
-let subdivisionLevel=4,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
+let subdivisionLevel=8,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
 const insideStartQuaternion=new THREE.Quaternion(),insideDeltaQuaternion=new THREE.Quaternion(),insideGrabDirection=new THREE.Vector3(),insideCandidateDirection=new THREE.Vector3();
 const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');
@@ -318,7 +368,7 @@ function walkFaces(){
   return walkCellFaces(visualMode,currentWalkCellId());
 }
 function portalPatternGeometry(vertices,face){
-  return checkerFaceGeometry(vertices,[face],6,subdivisionLevel);
+  return mixedWallFaceGeometry(vertices,[face],6,subdivisionLevel);
 }
 function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
@@ -329,7 +379,7 @@ function rebuildWalkCell(includeContext=true){
     // crossing it; after crossing, the reverse portal is tinted with the old
     // cell's stable graph color. This avoids doubled coplanar transparent walls.
     const destinationColor=walkCellColor(visualMode,entry.neighbor),wallGeometry=portalPatternGeometry(entry.vertices,entry.face);
-    const innerPattern=new THREE.Mesh(wallGeometry,new THREE.MeshPhongMaterial({color:currentColor,side:THREE.BackSide,shininess:25})),outerPattern=new THREE.Mesh(wallGeometry,new THREE.MeshPhongMaterial({color:destinationColor,side:THREE.FrontSide,shininess:25}));innerPattern.renderOrder=2;outerPattern.renderOrder=2;
+    const innerPattern=new THREE.Mesh(wallGeometry,new THREE.MeshPhongMaterial({color:currentColor,vertexColors:true,side:THREE.BackSide,shininess:25})),outerPattern=new THREE.Mesh(wallGeometry,new THREE.MeshPhongMaterial({color:destinationColor,vertexColors:true,side:THREE.FrontSide,shininess:25}));innerPattern.renderOrder=2;outerPattern.renderOrder=2;
     const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],8),new THREE.MeshBasicMaterial({transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,colorWrite:false}));
     mesh.userData={portal:true,neighbor:entry.neighbor,face:index,visuals:[innerPattern,outerPattern]};mesh.renderOrder=3;groups.walk.add(innerPattern,outerPattern,mesh);
     for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!seen.has(key)){seen.add(key);allPairs.push([a,b])}}

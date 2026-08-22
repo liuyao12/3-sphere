@@ -297,7 +297,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new 
 // A cell-centered atlas. The projection pole is kept antipodal to the current
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
-let wallTileDensity=2,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
+let wallTileDensity=4,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
 const insideStartQuaternion=new THREE.Quaternion(),insideDeltaQuaternion=new THREE.Quaternion(),insideGrabDirection=new THREE.Vector3(),insideCandidateDirection=new THREE.Vector3();
 const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');

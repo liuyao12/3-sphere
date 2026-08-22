@@ -58,7 +58,6 @@ function appendProjectedArc(points,a,b,pa=project(a),pb=project(b),depth=0){
   if(refine&&depth<8){appendProjectedArc(points,a,mid,pa,pm,depth+1);appendProjectedArc(points,mid,b,pm,pb,depth+1)}else if(segmentVisible(pa,pb))points.push(pa,pb);
 }
 function sphericalSegmentPoints(vertices,pairs){const pts=[];for(const[a,b]of pairs)appendProjectedArc(pts,vertices[a],vertices[b]);return pts}
-function lineSegments(pairs,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(poly.v,pairs)),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});return new THREE.LineSegments(geo,mat)}
 function appendSphericalTriangle(positions,a,b,c,quality=4){
   const maxDepth=Math.min(8,Math.max(4,quality+2));
   function subdivide(qa,qb,qc,pa,pb,pc,depth){
@@ -158,19 +157,25 @@ function cellMeetsTorus(mode,id,vertices,faces){
   return Math.abs(Math.sin(2*torusEta))<.035&&faces.some(face=>face.some((a,i)=>Math.abs(values.get(a))<=tol&&Math.abs(values.get(face[(i+1)%face.length]))<=tol));
 }
 function orientTrianglesToward(positions,target){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,mx=(ax+bx+cx)/3,my=(ay+by+cy)/3,mz=(az+bz+cz)/3;if(nx*(target.x-mx)+ny*(target.y-my)+nz*(target.z-mz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
-function coloredSharedWalls(mode){
-  const vertices=mode==='cell600'?poly.v:dualVertices,count=mode==='cell600'?poly.cells.length:poly.v.length,records=mode==='cell600'?cell600WallRecords:cell120WallRecords,centers=mode==='cell600'?dualVertices:poly.v,buckets=new Map(),hits=Array.from({length:count},(_,id)=>cellMeetsTorus(mode,id,vertices,overviewCellFaces(mode,id)));
+function cellHitFlags(mode,vertices){const count=mode==='cell600'?poly.cells.length:poly.v.length;return Array.from({length:count},(_,id)=>cellMeetsTorus(mode,id,vertices,overviewCellFaces(mode,id)))}
+function coloredSharedWalls(mode,hits){
+  const vertices=mode==='cell600'?poly.v:dualVertices,records=mode==='cell600'?cell600WallRecords:cell120WallRecords,centers=mode==='cell600'?dualVertices:poly.v,buckets=new Map();
   for(const{face,owners}of records){const[a,b]=owners,colorA=cellColorings[mode][a],colorB=cellColorings[mode][b],hitA=hits[a],hitB=hits[b],key=`${hitA?1:0}:${colorA}|${hitB?1:0}:${colorB}`;if(!buckets.has(key))buckets.set(key,[]);const facePositions=[];appendCheckerFacePositions(facePositions,vertices,[face],hitA||hitB?3:2);const target=project(centers[a]);if(projectionVisible(target))orientTrianglesToward(facePositions,target);else orientProjectedTriangles(facePositions);buckets.get(key).push(...facePositions)}
   const meshes=[];
   for(const[key,positions]of buckets){const[left,right]=key.split('|'),[hitA,colorA]=left.split(':').map(Number),[hitB,colorB]=right.split(':').map(Number),geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));const front=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:walkPalettes[mode][colorA],transparent:true,opacity:hitA?.34:.014,side:THREE.FrontSide,depthWrite:false})),back=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:walkPalettes[mode][colorB],transparent:true,opacity:hitB?.34:.014,side:THREE.BackSide,depthWrite:false}));front.renderOrder=hitA?2:0;back.renderOrder=hitB?2:0;meshes.push(front,back)}
   return meshes;
 }
+function wallEdgeLayers(mode,hits){
+  const vertices=mode==='cell600'?poly.v:dualVertices,records=mode==='cell600'?cell600WallRecords:cell120WallRecords,all=new Map(),strong=new Map();
+  for(const{face,owners}of records)for(let i=0;i<face.length;i++){const a=face[i],b=face[(i+1)%face.length],key=a<b?`${a},${b}`:`${b},${a}`,pair=a<b?[a,b]:[b,a];all.set(key,pair);if(owners.some(owner=>hits[owner]))strong.set(key,pair)}
+  const base=projectedSegments(vertices,[...all.values()],0x31465c,.16),accent=projectedSegments(vertices,[...strong.values()],0x24384f,.62);base.renderOrder=3;accent.renderOrder=4;return[base,accent];
+}
 function ensureProjectedPolytope(mode){
   const revision=`${overviewProjectionRevision}:${torusRevision}`;if(mode!=='cell600'&&mode!=='cell120'||projectedPolytopeRevision[mode]===revision)return;
   if(mode==='cell600'){
-    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x64748b,.055),...coloredSharedWalls(mode),projectedPointCloud(poly.v,.03,0x64748b,.16,6));
+    const hits=cellHitFlags(mode,poly.v);clearProjectionGroup(groups.cell);groups.cell.add(...coloredSharedWalls(mode,hits),...wallEdgeLayers(mode,hits),projectedPointCloud(poly.v,.03,0x64748b,.16,6));
   }else{
-    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x64748b,.05),...coloredSharedWalls(mode),projectedPointCloud(dualVertices,.018,0x64748b,.12,5));
+    const hits=cellHitFlags(mode,dualVertices);clearProjectionGroup(groups.cell120);groups.cell120.add(...coloredSharedWalls(mode,hits),...wallEdgeLayers(mode,hits),projectedPointCloud(dualVertices,.018,0x64748b,.12,5));
   }
   projectedPolytopeRevision[mode]=revision;
 }

@@ -129,17 +129,17 @@ const dualVertices=poly.cells.map(c=>normalize([0,1,2,3].map(k=>c.reduce((sum,id
 const dualFaceMap=new Map();
 poly.cells.forEach((c,ci)=>{for(let k=0;k<4;k++){const key=c.filter((_,j)=>j!==k).sort((x,y)=>x-y).join(',');if(!dualFaceMap.has(key))dualFaceMap.set(key,[]);dualFaceMap.get(key).push(ci)}});
 const dualEdges=[...dualFaceMap.values()].filter(x=>x.length===2).map(x=>[x[0],x[1]]);
-const cell600Faces=[...dualFaceMap.keys()].map(key=>key.split(',').map(Number));
+const cell600WallRecords=[...dualFaceMap.entries()].filter(([,owners])=>owners.length===2).map(([key,owners])=>({face:key.split(',').map(Number),owners}));
 function projectedSegments(vertices,pairs,color,opacity){return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(vertices,pairs)),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false}))}
 
 const primalEdgeCells=new Map();
 poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
 function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
-const cell120Faces=[...primalEdgeCells.values()].map(orderPentagon).filter(face=>face.length===5);
+const cell120WallRecords=[...primalEdgeCells.entries()].map(([key,ids])=>({face:orderPentagon(ids),owners:key.split(',').map(Number)})).filter(record=>record.face.length===5);
 const cell120VertexIds=Array.from({length:poly.v.length},()=>[]);poly.cells.forEach((cell,vertexId)=>cell.forEach(id=>cell120VertexIds[id].push(vertexId)));
 let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10)),torusRevision=0;
 const projectedPolytopeRevision={cell600:'',cell120:''};
-function clearProjectionGroup(group){while(group.children.length){const child=group.children.pop();child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose()}}
+function clearProjectionGroup(group){const geometries=new Set();while(group.children.length){const child=group.children.pop();if(child.geometry)geometries.add(child.geometry);if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose()}geometries.forEach(geometry=>geometry.dispose())}
 function projectedPointCloud(vertices,radius,color,opacity,segments){
   const points=vertices.map(project).filter(projectionVisible),geometry=new THREE.SphereGeometry(radius,segments,segments),material=new THREE.MeshBasicMaterial({color,transparent:true,opacity}),mesh=new THREE.InstancedMesh(geometry,material,points.length),matrix=new THREE.Matrix4();
   points.forEach((point,index)=>{matrix.makeTranslation(point.x,point.y,point.z);mesh.setMatrixAt(index,matrix)});mesh.instanceMatrix.needsUpdate=true;return mesh;
@@ -157,23 +157,20 @@ function cellMeetsTorus(mode,id,vertices,faces){
   if(faces.some(face=>face.every(vertexId=>Math.abs(values.get(vertexId))<=tol)))return true;
   return Math.abs(Math.sin(2*torusEta))<.035&&faces.some(face=>face.some((a,i)=>Math.abs(values.get(a))<=tol&&Math.abs(values.get(face[(i+1)%face.length]))<=tol));
 }
-function coloredCellShells(mode){
-  const vertices=mode==='cell600'?poly.v:dualVertices,count=mode==='cell600'?poly.cells.length:poly.v.length,buckets=new Map();
-  for(let id=0;id<count;id++){
-    const faces=overviewCellFaces(mode,id),ids=overviewCellVertices(mode,id),center=normalize([0,1,2,3].map(k=>ids.reduce((sum,vertexId)=>sum+vertices[vertexId][k],0))),hit=cellMeetsTorus(mode,id,vertices,faces),key=`${hit?'hit':'dim'}:${cellColorings[mode][id]}`;
-    if(!buckets.has(key))buckets.set(key,[]);const insetVertices=vertices.slice();for(const vertexId of ids)insetVertices[vertexId]=slerp(vertices[vertexId],center,.028);
-    appendCheckerFacePositions(buckets.get(key),insetVertices,faces,hit?3:2);
-  }
+function orientTrianglesToward(positions,target){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx,mx=(ax+bx+cx)/3,my=(ay+by+cy)/3,mz=(az+bz+cz)/3;if(nx*(target.x-mx)+ny*(target.y-my)+nz*(target.z-mz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
+function coloredSharedWalls(mode){
+  const vertices=mode==='cell600'?poly.v:dualVertices,count=mode==='cell600'?poly.cells.length:poly.v.length,records=mode==='cell600'?cell600WallRecords:cell120WallRecords,centers=mode==='cell600'?dualVertices:poly.v,buckets=new Map(),hits=Array.from({length:count},(_,id)=>cellMeetsTorus(mode,id,vertices,overviewCellFaces(mode,id)));
+  for(const{face,owners}of records){const[a,b]=owners,colorA=cellColorings[mode][a],colorB=cellColorings[mode][b],hitA=hits[a],hitB=hits[b],key=`${hitA?1:0}:${colorA}|${hitB?1:0}:${colorB}`;if(!buckets.has(key))buckets.set(key,[]);const facePositions=[];appendCheckerFacePositions(facePositions,vertices,[face],hitA||hitB?3:2);const target=project(centers[a]);if(projectionVisible(target))orientTrianglesToward(facePositions,target);else orientProjectedTriangles(facePositions);buckets.get(key).push(...facePositions)}
   const meshes=[];
-  for(const[key,positions]of buckets){const[status,colorIndex]=key.split(':'),hit=status==='hit';orientProjectedTriangles(positions);const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();const mesh=new THREE.Mesh(geometry,new THREE.MeshPhongMaterial({color:walkPalettes[mode][+colorIndex],transparent:true,opacity:hit?.34:.014,side:THREE.DoubleSide,depthWrite:false,shininess:22}));mesh.renderOrder=hit?2:0;meshes.push(mesh)}
+  for(const[key,positions]of buckets){const[left,right]=key.split('|'),[hitA,colorA]=left.split(':').map(Number),[hitB,colorB]=right.split(':').map(Number),geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));const front=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:walkPalettes[mode][colorA],transparent:true,opacity:hitA?.34:.014,side:THREE.FrontSide,depthWrite:false})),back=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:walkPalettes[mode][colorB],transparent:true,opacity:hitB?.34:.014,side:THREE.BackSide,depthWrite:false}));front.renderOrder=hitA?2:0;back.renderOrder=hitB?2:0;meshes.push(front,back)}
   return meshes;
 }
 function ensureProjectedPolytope(mode){
   const revision=`${overviewProjectionRevision}:${torusRevision}`;if(mode!=='cell600'&&mode!=='cell120'||projectedPolytopeRevision[mode]===revision)return;
   if(mode==='cell600'){
-    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x64748b,.055),...coloredCellShells(mode),projectedPointCloud(poly.v,.03,0x64748b,.16,6));
+    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x64748b,.055),...coloredSharedWalls(mode),projectedPointCloud(poly.v,.03,0x64748b,.16,6));
   }else{
-    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x64748b,.05),...coloredCellShells(mode),projectedPointCloud(dualVertices,.018,0x64748b,.12,5));
+    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x64748b,.05),...coloredSharedWalls(mode),projectedPointCloud(dualVertices,.018,0x64748b,.12,5));
   }
   projectedPolytopeRevision[mode]=revision;
 }
@@ -296,7 +293,7 @@ const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySel
 function nearestCenter(centers,target){let best=0,score=-Infinity;for(let i=0;i<centers.length;i++){const s=dot(centers[i],target);if(s>score){score=s;best=i}}return best}
 const initialChartCenter=overviewPole.map(x=>-x);
 walkCell600=nearestCenter(dualVertices,initialChartCenter);walkCell120=nearestCenter(poly.v,initialChartCenter);
-function disposeGroup(group){while(group.children.length){const child=group.children.pop();child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(m=>m.dispose());else child.material?.dispose()}}
+function disposeGroup(group){const geometries=new Set();while(group.children.length){const child=group.children.pop();if(child.geometry)geometries.add(child.geometry);if(Array.isArray(child.material))child.material.forEach(m=>m.dispose());else child.material?.dispose()}geometries.forEach(geometry=>geometry.dispose())}
 function faceNeighbor600(cellId,face){const owners=dualFaceMap.get([...face].sort((x,y)=>x-y).join(','));return owners?.find(id=>id!==cellId)}
 const cell600Adjacency=Array.from({length:poly.cells.length},()=>new Set());for(const[a,b]of dualEdges){cell600Adjacency[a].add(b);cell600Adjacency[b].add(a)}
 function walkNeighbors(mode,id){return mode==='cell120'?[...poly.adjacency[id]]:[...cell600Adjacency[id]]}
@@ -318,8 +315,8 @@ function rebuildWalkCell(includeContext=true){
     // The face is one geometric sheet. Its tint previews the cell reached by
     // crossing it; after crossing, the reverse portal is tinted with the old
     // cell's stable graph color. This avoids doubled coplanar transparent walls.
-    const destinationColor=walkCellColor(visualMode,entry.neighbor),innerGeometry=portalPatternGeometry(entry.vertices,entry.face),outerGeometry=innerGeometry.clone();
-    const innerPattern=new THREE.Mesh(innerGeometry,new THREE.MeshPhongMaterial({color:currentColor,side:THREE.BackSide,shininess:25})),outerPattern=new THREE.Mesh(outerGeometry,new THREE.MeshPhongMaterial({color:destinationColor,side:THREE.FrontSide,shininess:25}));innerPattern.renderOrder=2;outerPattern.renderOrder=2;
+    const destinationColor=walkCellColor(visualMode,entry.neighbor),wallGeometry=portalPatternGeometry(entry.vertices,entry.face);
+    const innerPattern=new THREE.Mesh(wallGeometry,new THREE.MeshPhongMaterial({color:currentColor,side:THREE.BackSide,shininess:25})),outerPattern=new THREE.Mesh(wallGeometry,new THREE.MeshPhongMaterial({color:destinationColor,side:THREE.FrontSide,shininess:25}));innerPattern.renderOrder=2;outerPattern.renderOrder=2;
     const mesh=new THREE.Mesh(sphericalFaceGeometry(entry.vertices,[entry.face],8),new THREE.MeshBasicMaterial({transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,colorWrite:false}));
     mesh.userData={portal:true,neighbor:entry.neighbor,face:index,visuals:[innerPattern,outerPattern]};mesh.renderOrder=3;groups.walk.add(innerPattern,outerPattern,mesh);
     for(let i=0;i<entry.face.length;i++){const a=entry.face[i],b=entry.face[(i+1)%entry.face.length],key=a<b?`${a},${b}`:`${b},${a}`;if(!seen.has(key)){seen.add(key);allPairs.push([a,b])}}

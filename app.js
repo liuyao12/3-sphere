@@ -384,11 +384,12 @@ function rebuildChart(includeTorus=true){
 function walkCenterFor(mode,id){return mode==='simplex'?simplex4.centers[id]:mode==='cell120'?poly.v[id]:dualVertices[id]}
 function setCurrentWalkCell(id){if(visualMode==='simplex')walkCellSimplex=id;else if(visualMode==='cell120')walkCell120=id;else walkCell600=id}
 function currentWalkCenter(){return walkCenterFor(visualMode,currentWalkCellId())}
+const CELL_CROSSING_DURATION=1500;
 function enterWalkCell(neighbor){
   if(walkAnimating||neighbor===undefined)return;
   const startCenter=currentWalkCenter(),endCenter=walkCenterFor(visualMode,neighbor),startAxes=projectionAxes.map(axis=>[...axis]),started=performance.now();let crossed=false;walkAnimating=true;hoveredPortal=null;
   function frame(now){
-    const raw=Math.min(1,(now-started)/520),t=raw*raw*(3-2*raw),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
+    const raw=Math.min(1,(now-started)/CELL_CROSSING_DURATION),t=raw*raw*raw*(raw*(raw*6-15)+10),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
     setWalkChart(center,axes);if(!crossed&&raw>=.5){setCurrentWalkCell(neighbor);crossed=true}rebuildWalkCell(false);rebuildExtremes();updateSelectedHopfFiber(hopfBaseVector);requestRender();
     if(visualMode==='hopf')rebuildAmbientHopf();
     if(raw<1)requestAnimationFrame(frame);else{if(!crossed)setCurrentWalkCell(neighbor);walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}

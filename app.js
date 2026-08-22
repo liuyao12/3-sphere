@@ -58,14 +58,16 @@ function sphericalPoint(a,b,c,wa,wb,wc){return normalize(a.map((x,i)=>wa*x+wb*b[
 function appendSphericalTriangle(positions,a,b,c,subdivisions=8){const point=(i,j)=>project(sphericalPoint(a,b,c,1-(i+j)/subdivisions,i/subdivisions,j/subdivisions));for(let i=0;i<subdivisions;i++)for(let j=0;j<subdivisions-i;j++){const p0=point(i,j),p1=point(i+1,j),p2=point(i,j+1);if(triangleVisible(p0,p1,p2))for(const p of[p0,p1,p2])positions.push(p.x,p.y,p.z);if(j<subdivisions-i-1){const p3=point(i+1,j+1);if(triangleVisible(p1,p3,p2))for(const p of[p1,p3,p2])positions.push(p.x,p.y,p.z)}}}
 function sphericalFaceGeometry(vertices,faces,subdivisions=8){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]],subdivisions)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
 function orientProjectedTriangles(positions){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;if(nx*(ax+bx+cx)+ny*(ay+by+cy)+nz*(az+bz+cz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
-function checkerFaceGeometry(vertices,faces,subdivisions=6){
-  const positions=[];
+function appendCheckerFacePositions(positions,vertices,faces,subdivisions=6){
   for(const face of faces){
     const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));
     // A regular triangle becomes six congruent half-edge sectors; a regular
     // pentagon becomes ten. Paint alternating sectors, leaving equal-area holes.
     for(let i=0;i<face.length;i++){const a=vertices[face[i]],b=vertices[face[(i+1)%face.length]],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,subdivisions)}
   }
+}
+function checkerFaceGeometry(vertices,faces,subdivisions=6){
+  const positions=[];appendCheckerFacePositions(positions,vertices,faces,subdivisions);
   orientProjectedTriangles(positions);const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo;
 }
 function checkerFaces(vertices,faces,color,opacity,subdivisions=5){return new THREE.Mesh(checkerFaceGeometry(vertices,faces,subdivisions),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
@@ -120,22 +122,47 @@ const primalEdgeCells=new Map();
 poly.cells.forEach((c,ci)=>{for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const key=[c[i],c[j]].sort((x,y)=>x-y).join(',');if(!primalEdgeCells.has(key))primalEdgeCells.set(key,[]);primalEdgeCells.get(key).push(ci)}});
 function orderPentagon(ids){const ordered=[ids[0]],used=new Set(ordered);while(ordered.length<ids.length){const last=ordered.at(-1),next=ids.find(id=>!used.has(id)&&poly.cells[last].filter(x=>poly.cells[id].includes(x)).length===3);if(next===undefined)break;ordered.push(next);used.add(next)}return ordered}
 const cell120Faces=[...primalEdgeCells.values()].map(orderPentagon).filter(face=>face.length===5);
-const projectedPolytopeRevision={cell600:-1,cell120:-1};
+const cell120VertexIds=Array.from({length:poly.v.length},()=>[]);poly.cells.forEach((cell,vertexId)=>cell.forEach(id=>cell120VertexIds[id].push(vertexId)));
+let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10)),torusRevision=0;
+const projectedPolytopeRevision={cell600:'',cell120:''};
 function clearProjectionGroup(group){while(group.children.length){const child=group.children.pop();child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose()}}
 function projectedPointCloud(vertices,radius,color,opacity,segments){
   const points=vertices.map(project).filter(projectionVisible),geometry=new THREE.SphereGeometry(radius,segments,segments),material=new THREE.MeshBasicMaterial({color,transparent:true,opacity}),mesh=new THREE.InstancedMesh(geometry,material,points.length),matrix=new THREE.Matrix4();
   points.forEach((point,index)=>{matrix.makeTranslation(point.x,point.y,point.z);mesh.setMatrixAt(index,matrix)});mesh.instanceMatrix.needsUpdate=true;return mesh;
 }
-function ensureProjectedPolytope(mode){
-  if(mode!=='cell600'&&mode!=='cell120'||projectedPolytopeRevision[mode]===overviewProjectionRevision)return;
-  if(mode==='cell600'){
-    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x9b6700,.15),checkerFaces(poly.v,cell600Faces,0xb47700,.045,4),projectedPointCloud(poly.v,.035,0xb47700,.42,7));
-  }else{
-    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x9f8cff,.14),checkerFaces(dualVertices,cell120Faces,0x8f78e8,.04,4),projectedPointCloud(dualVertices,.022,0xb8aaff,.3,5));
-  }
-  projectedPolytopeRevision[mode]=overviewProjectionRevision;
+function overviewCellFaces(mode,id){
+  if(mode==='cell600'){const cell=poly.cells[id];return cell.map((_,k)=>cell.filter((__,j)=>j!==k))}
+  return [...poly.adjacency[id]].map(neighbor=>orderPentagon(primalEdgeCells.get([id,neighbor].sort((a,b)=>a-b).join(','))));
 }
-let torusEta=Math.acos(Math.sqrt((5+Math.sqrt(5))/10));
+function overviewCellVertices(mode,id){return mode==='cell600'?poly.cells[id]:cell120VertexIds[id]}
+function torusLevel(q){return dot(q,basisU)**2+dot(q,basisV)**2-Math.cos(torusEta)**2}
+function cellMeetsTorus(mode,id,vertices,faces){
+  const ids=overviewCellVertices(mode,id),values=new Map(ids.map(vertexId=>[vertexId,torusLevel(vertices[vertexId])])),tol=2e-7;
+  const hasPositive=[...values.values()].some(value=>value>tol),hasNegative=[...values.values()].some(value=>value<-tol);
+  if(hasPositive&&hasNegative)return true;
+  if(faces.some(face=>face.every(vertexId=>Math.abs(values.get(vertexId))<=tol)))return true;
+  return Math.abs(Math.sin(2*torusEta))<.035&&faces.some(face=>face.some((a,i)=>Math.abs(values.get(a))<=tol&&Math.abs(values.get(face[(i+1)%face.length]))<=tol));
+}
+function coloredCellShells(mode){
+  const vertices=mode==='cell600'?poly.v:dualVertices,count=mode==='cell600'?poly.cells.length:poly.v.length,buckets=new Map();
+  for(let id=0;id<count;id++){
+    const faces=overviewCellFaces(mode,id),ids=overviewCellVertices(mode,id),center=normalize([0,1,2,3].map(k=>ids.reduce((sum,vertexId)=>sum+vertices[vertexId][k],0))),hit=cellMeetsTorus(mode,id,vertices,faces),key=`${hit?'hit':'dim'}:${cellColorings[mode][id]}`;
+    if(!buckets.has(key))buckets.set(key,[]);const insetVertices=vertices.slice();for(const vertexId of ids)insetVertices[vertexId]=slerp(vertices[vertexId],center,.028);
+    appendCheckerFacePositions(buckets.get(key),insetVertices,faces,hit?3:2);
+  }
+  const meshes=[];
+  for(const[key,positions]of buckets){const[status,colorIndex]=key.split(':'),hit=status==='hit';orientProjectedTriangles(positions);const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();const mesh=new THREE.Mesh(geometry,new THREE.MeshPhongMaterial({color:walkPalettes[mode][+colorIndex],transparent:true,opacity:hit?.34:.014,side:THREE.DoubleSide,depthWrite:false,shininess:22}));mesh.renderOrder=hit?2:0;meshes.push(mesh)}
+  return meshes;
+}
+function ensureProjectedPolytope(mode){
+  const revision=`${overviewProjectionRevision}:${torusRevision}`;if(mode!=='cell600'&&mode!=='cell120'||projectedPolytopeRevision[mode]===revision)return;
+  if(mode==='cell600'){
+    clearProjectionGroup(groups.cell);groups.cell.add(lineSegments(poly.edges,0x64748b,.055),...coloredCellShells(mode),projectedPointCloud(poly.v,.03,0x64748b,.16,6));
+  }else{
+    clearProjectionGroup(groups.cell120);groups.cell120.add(projectedSegments(dualVertices,dualEdges,0x64748b,.05),...coloredCellShells(mode),projectedPointCloud(dualVertices,.018,0x64748b,.12,5));
+  }
+  projectedPolytopeRevision[mode]=revision;
+}
 function torusPoint(u,v){const torusR=Math.cos(torusEta),torusr=Math.sin(torusEta);return basisU.map((_,i)=>torusR*(Math.cos(u)*basisU[i]+Math.sin(u)*basisV[i])+torusr*(Math.cos(v)*basisN[i]+Math.sin(v)*basisM[i]))}
 const AMBIENT_HOPF_COUNT=48,goldenAngle=Math.PI*(3-Math.sqrt(5));
 function hopfFiberPoint(eta,delta,t){return basisU.map((_,i)=>
@@ -412,9 +439,12 @@ function setHopfBaseVector(vector){
   hopfBaseVector.copy(vector).normalize();updateHopfBaseDisplay();cancelAnimationFrame(hopfSelectionFrame);
   hopfSelectionFrame=requestAnimationFrame(()=>{if(visualMode==='hopf')updateSelectedHopfFiber(hopfBaseVector);requestRender()});
 }
+let cellHighlightTimer=0;
+function refreshCellHighlights(){clearTimeout(cellHighlightTimer);torusRevision++;if(!walkView&&(visualMode==='cell600'||visualMode==='cell120'))ensureProjectedPolytope(visualMode);requestRender()}
 function setTorusLatitude(z){
   torusEta=.5*Math.acos(THREE.MathUtils.clamp(z,-1,1));updateHopfBaseDisplay();cancelAnimationFrame(torusSelectionFrame);
   torusSelectionFrame=requestAnimationFrame(()=>{if(!walkView)updateTorusGeometry();requestRender()});
+  clearTimeout(cellHighlightTimer);cellHighlightTimer=setTimeout(refreshCellHighlights,140);
 }
 function hopfScreenPoint(event){const rect=hopfBase.getBoundingClientRect();return new THREE.Vector2((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12))}
 function hopfTrackball(point){const vector=new THREE.Vector3(point.x,point.y,0),r2=vector.x*vector.x+vector.y*vector.y;if(r2>1)vector.multiplyScalar(1/Math.sqrt(r2));else vector.z=Math.sqrt(1-r2);return vector}
@@ -432,7 +462,7 @@ hopfBase.addEventListener('pointerdown',event=>{
   else{hopfDragMode='sphere';hopfDragStartVector.copy(hopfTrackball(point));hopfDragStartOrientation.copy(hopfBaseOrientation)}
 });
 hopfBase.addEventListener('pointermove',event=>{if(!hopfBase.hasPointerCapture(event.pointerId))return;const point=hopfScreenPoint(event);if(hopfDragMode==='point')setHopfBaseFromScreen(point);else if(hopfDragMode==='torus')setTorusFromScreen(point);else if(hopfDragMode==='sphere'){hopfDragDelta.setFromUnitVectors(hopfDragStartVector,hopfTrackball(point));hopfBaseOrientation.copy(hopfDragDelta).multiply(hopfDragStartOrientation).normalize();updateHopfBaseDisplay()}});
-function endHopfDrag(event){hopfDragMode='';hopfBase.classList.remove('dragging');if(hopfBase.hasPointerCapture(event.pointerId))hopfBase.releasePointerCapture(event.pointerId)}
+function endHopfDrag(event){const movedTorus=hopfDragMode==='torus';hopfDragMode='';hopfBase.classList.remove('dragging');if(hopfBase.hasPointerCapture(event.pointerId))hopfBase.releasePointerCapture(event.pointerId);if(movedTorus)refreshCellHighlights()}
 hopfBase.addEventListener('pointerup',endHopfDrag);hopfBase.addEventListener('pointercancel',endHopfDrag);
 hopfBase.addEventListener('keydown',event=>{const step=event.shiftKey ? .1 : .035,display=hopfBaseVector.clone().applyQuaternion(hopfBaseOrientation);if(event.key==='ArrowLeft')display.x-=step;else if(event.key==='ArrowRight')display.x+=step;else if(event.key==='ArrowUp')display.y+=step;else if(event.key==='ArrowDown')display.y-=step;else return;setHopfBaseFromScreen(display);event.preventDefault()});
 hopfTorusHandle.addEventListener('keydown',event=>{const step=event.shiftKey?.1:.035,z=Math.cos(2*torusEta);if(event.key==='ArrowUp'||event.key==='ArrowRight')setTorusLatitude(z+step);else if(event.key==='ArrowDown'||event.key==='ArrowLeft')setTorusLatitude(z-step);else return;event.stopPropagation();event.preventDefault()});

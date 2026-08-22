@@ -71,19 +71,29 @@ function appendSphericalTriangle(positions,a,b,c,quality=4){
 }
 function sphericalFaceGeometry(vertices,faces,subdivisions=8){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]],subdivisions)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
 function orientProjectedTriangles(positions){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;if(nx*(ax+bx+cx)+ny*(ay+by+cy)+nz*(az+bz+cz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
-function appendCheckerFacePositions(positions,vertices,faces,subdivisions=6){
-  for(const face of faces){
-    const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));
-    // A regular triangle becomes six congruent half-edge sectors; a regular
-    // pentagon becomes ten. Paint alternating sectors, leaving equal-area holes.
-    for(let i=0;i<face.length;i++){const a=vertices[face[i]],b=vertices[face[(i+1)%face.length]],mid=slerp(a,b,.5);appendSphericalTriangle(positions,center,a,mid,subdivisions)}
+function appendCheckerSector(positions,cornerA,cornerB,cornerC,density,paintUp,quality){
+  const point=(i,j)=>normalize(cornerA.map((value,k)=>value*(1-(i+j)/density)+cornerB[k]*i/density+cornerC[k]*j/density));
+  for(let i=0;i<density;i++)for(let j=0;j<density-i;j++){
+    if(paintUp)appendSphericalTriangle(positions,point(i,j),point(i+1,j),point(i,j+1),quality);
+    if(!paintUp&&i+j<=density-2)appendSphericalTriangle(positions,point(i+1,j),point(i+1,j+1),point(i,j+1),quality);
   }
 }
-function checkerFaceGeometry(vertices,faces,subdivisions=6){
-  const positions=[];appendCheckerFacePositions(positions,vertices,faces,subdivisions);
+function appendCheckerFacePositions(positions,vertices,faces,subdivisions=6,tileDensity=1){
+  for(const face of faces){
+    const center=[0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)/face.length);
+    // Split each regular face into 2n congruent planar sectors, then subdivide
+    // every sector into equal-area triangles before radial and stereographic projection.
+    for(let i=0;i<face.length;i++){
+      const a=vertices[face[i]],b=vertices[face[(i+1)%face.length]],mid=a.map((value,k)=>(value+b[k])/2);
+      appendCheckerSector(positions,center,a,mid,tileDensity,true,subdivisions);appendCheckerSector(positions,center,mid,b,tileDensity,false,subdivisions);
+    }
+  }
+}
+function checkerFaceGeometry(vertices,faces,subdivisions=6,tileDensity=1){
+  const positions=[];appendCheckerFacePositions(positions,vertices,faces,subdivisions,tileDensity);
   orientProjectedTriangles(positions);const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo;
 }
-function checkerFaces(vertices,faces,color,opacity,subdivisions=5){return new THREE.Mesh(checkerFaceGeometry(vertices,faces,subdivisions),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
+function checkerFaces(vertices,faces,color,opacity,subdivisions=5,tileDensity=1){return new THREE.Mesh(checkerFaceGeometry(vertices,faces,subdivisions,tileDensity),new THREE.MeshPhongMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,shininess:18}))}
 
 // A decagonal great circle fixes the coordinate splitting used by the torus.
 const a=0,b=[...poly.adjacency[a]][0],basisU=poly.v[a];
@@ -287,7 +297,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new 
 // A cell-centered atlas. The projection pole is kept antipodal to the current
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
-let walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
+let wallTileDensity=2,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
 const insideStartQuaternion=new THREE.Quaternion(),insideDeltaQuaternion=new THREE.Quaternion(),insideGrabDirection=new THREE.Vector3(),insideCandidateDirection=new THREE.Vector3();
 const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');
@@ -308,7 +318,7 @@ function walkFaces(){
   return walkCellFaces(visualMode,currentWalkCellId());
 }
 function portalPatternGeometry(vertices,face){
-  return checkerFaceGeometry(vertices,[face],6);
+  return checkerFaceGeometry(vertices,[face],6,wallTileDensity);
 }
 function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
@@ -340,7 +350,7 @@ function rebuildWalkCell(includeContext=true){
       const key=[...entry.face].sort((a,b)=>a-b).join(',');if(seenFaces.has(key))continue;seenFaces.add(key);if(!faceBuckets.has(color))faceBuckets.set(color,[]);faceBuckets.get(color).push(entry.face);
     }
   }
-  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(checkerFaceGeometry(vertices,shellFaces,5),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
+  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(checkerFaceGeometry(vertices,shellFaces,5,wallTileDensity),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
   for(const[color,bucket]of nearEdgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.52);trace.renderOrder=1;groups.walk.add(trace)}
   const far=new Set();for(const cellId of immediate)for(const next of walkNeighbors(visualMode,cellId))if(!nearSet.has(next))far.add(next);
   const edgeBuckets=new Map();
@@ -501,6 +511,8 @@ modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)
 window.addEventListener('popstate',()=>{selectMode(modeFromUrl());setWalkView(new URL(location.href).searchParams.get('view')==='walk',null)});
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`;requestRender()});
+const wallDetail=document.querySelector('#wall-detail'),wallDetailValue=document.querySelector('#wall-detail-value');let wallDetailFrame=0;
+wallDetail.addEventListener('input',()=>{wallTileDensity=+wallDetail.value;wallDetailValue.value=`${wallTileDensity}×`;cancelAnimationFrame(wallDetailFrame);wallDetailFrame=requestAnimationFrame(()=>{if(walkView)rebuildWalkCell();requestRender()})});
 const projectionControl=document.querySelector('#projection-point'),projectionStops=[...document.querySelectorAll('[data-projection-stop]')];let projectionFrame=0,projectionSnapFrame=0,lastPolytopeProjection=0;
 function updateOverviewProjection(forcePolytope=false){
   const amount=+projectionControl.value/100,angle=amount*Math.PI/2,c=Math.cos(angle),s=Math.sin(angle);

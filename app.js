@@ -371,17 +371,17 @@ function rebuildChart(includeTorus=true){
   rebuildWalkCell();
   if(includeTorus)updateTorusGeometry();
 }
-function currentWalkCenter(){return visualMode==='simplex'?simplex4.centers[walkCellSimplex]:visualMode==='cell120'?poly.v[walkCell120]:dualVertices[walkCell600]}
+function walkCenterFor(mode,id){return mode==='simplex'?simplex4.centers[id]:mode==='cell120'?poly.v[id]:dualVertices[id]}
+function setCurrentWalkCell(id){if(visualMode==='simplex')walkCellSimplex=id;else if(visualMode==='cell120')walkCell120=id;else walkCell600=id}
+function currentWalkCenter(){return walkCenterFor(visualMode,currentWalkCellId())}
 function enterWalkCell(neighbor){
   if(walkAnimating||neighbor===undefined)return;
-  const startCenter=currentWalkCenter(),startAxes=projectionAxes.map(axis=>[...axis]);
-  if(visualMode==='simplex')walkCellSimplex=neighbor;else if(visualMode==='cell120')walkCell120=neighbor;else walkCell600=neighbor;
-  const endCenter=currentWalkCenter(),started=performance.now();walkAnimating=true;hoveredPortal=null;
+  const startCenter=currentWalkCenter(),endCenter=walkCenterFor(visualMode,neighbor),startAxes=projectionAxes.map(axis=>[...axis]),started=performance.now();let crossed=false;walkAnimating=true;hoveredPortal=null;
   function frame(now){
     const raw=Math.min(1,(now-started)/520),t=raw*raw*(3-2*raw),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
-    setWalkChart(center,axes);rebuildWalkCell(false);requestRender();
+    setWalkChart(center,axes);if(!crossed&&raw>=.5){setCurrentWalkCell(neighbor);crossed=true}rebuildWalkCell(false);requestRender();
     if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector)}
-    if(raw<1)requestAnimationFrame(frame);else{walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}
+    if(raw<1)requestAnimationFrame(frame);else{if(!crossed)setCurrentWalkCell(neighbor);walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}
   }
   requestAnimationFrame(frame);
 }

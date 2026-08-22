@@ -266,7 +266,7 @@ function appendAdaptiveTorusPatch(pointAt,positions,colors,color,maxDepth=4){
   subdivide(0,0,1,1,sample(0,0),sample(1,0),sample(0,1),sample(1,1),0);
 }
 function buildTorusCheckerboard(){
-  const N=12,step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],color=new THREE.Color(torusPalettes.hopf[1]);
+  const N=2*(subdivisionLevel+2),step=Math.PI*2/N,positions=[],colors=[],rulings=[[],[]],color=new THREE.Color(torusPalettes.hopf[1]);
   // In Hopf coordinates a=v-u and b=u+v, each tile edge is itself a fiber.
   // b runs through 4π so this rectangle covers the torus exactly once.
   for(let ia=0;ia<N;ia++)for(let ib=0;ib<2*N;ib++){
@@ -288,7 +288,7 @@ function buildTorusCheckerboard(){
   torusRulingA.geometry=new THREE.BufferGeometry().setFromPoints(rulings[0]);
   torusRulingB.geometry.dispose();
   torusRulingB.geometry=new THREE.BufferGeometry().setFromPoints(rulings[1]);
-  document.querySelector('#grid-description').textContent=visualMode==='hopf'?`${AMBIENT_HOPF_COUNT} fibers through S³ · 12 + 12 on torus`:visualMode==='simplex'?'4-simplex · 5 tetrahedral cells':`Full ${visualMode==='cell120'?'120':'600'}-cell · selected-fiber cells emphasized`;
+  document.querySelector('#grid-description').textContent=visualMode==='hopf'?`${AMBIENT_HOPF_COUNT} fibers through S³ · ${N} + ${N} on torus`:visualMode==='simplex'?'4-simplex · 5 tetrahedral cells':`Full ${visualMode==='cell120'?'120':'600'}-cell · selected-fiber cells emphasized`;
 }
 function updateLimitCurves(){groups.extremes.visible=true}
 function updateTorusGeometry(){buildTorusCheckerboard();updateLimitCurves()}
@@ -297,7 +297,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xd9e3f0,1.45));const keyLight=new 
 // A cell-centered atlas. The projection pole is kept antipodal to the current
 // cell center, where stereographic scale is smallest and isotropic. Clicking a
 // wall carries the tangent frame by the minimal rotation in S³.
-let wallTileDensity=4,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
+let subdivisionLevel=4,walkCellSimplex=0,walkCell600=0,walkCell120=0,walkAnimating=false,hoveredPortal=null,insideYaw=0,insidePitch=0,insidePointer=false;
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),pointerDown=new THREE.Vector2();
 const insideStartQuaternion=new THREE.Quaternion(),insideDeltaQuaternion=new THREE.Quaternion(),insideGrabDirection=new THREE.Vector3(),insideCandidateDirection=new THREE.Vector3();
 const walkHint=document.querySelector('#walk-hint'),walkToggle=document.querySelector('#walk-toggle'),stageHelp=document.querySelector('#stage-help');
@@ -318,7 +318,7 @@ function walkFaces(){
   return walkCellFaces(visualMode,currentWalkCellId());
 }
 function portalPatternGeometry(vertices,face){
-  return checkerFaceGeometry(vertices,[face],6,wallTileDensity);
+  return checkerFaceGeometry(vertices,[face],6,subdivisionLevel);
 }
 function rebuildWalkCell(includeContext=true){
   disposeGroup(groups.walk);
@@ -350,7 +350,7 @@ function rebuildWalkCell(includeContext=true){
       const key=[...entry.face].sort((a,b)=>a-b).join(',');if(seenFaces.has(key))continue;seenFaces.add(key);if(!faceBuckets.has(color))faceBuckets.set(color,[]);faceBuckets.get(color).push(entry.face);
     }
   }
-  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(checkerFaceGeometry(vertices,shellFaces,5,wallTileDensity),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
+  for(const[color,shellFaces]of faceBuckets){const shell=new THREE.Mesh(checkerFaceGeometry(vertices,shellFaces,5,subdivisionLevel),new THREE.MeshPhongMaterial({color,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false,shininess:18}));shell.renderOrder=0;groups.walk.add(shell)}
   for(const[color,bucket]of nearEdgeBuckets){const trace=projectedSegments(vertices,bucket.pairs,color,.52);trace.renderOrder=1;groups.walk.add(trace)}
   const far=new Set();for(const cellId of immediate)for(const next of walkNeighbors(visualMode,cellId))if(!nearSet.has(next))far.add(next);
   const edgeBuckets=new Map();
@@ -390,9 +390,9 @@ function enterWalkCell(neighbor){
   const startCenter=currentWalkCenter(),endCenter=walkCenterFor(visualMode,neighbor),startAxes=projectionAxes.map(axis=>[...axis]),started=performance.now();let crossed=false;walkAnimating=true;hoveredPortal=null;
   function frame(now){
     const raw=Math.min(1,(now-started)/CELL_CROSSING_DURATION),t=raw*raw*raw*(raw*(raw*6-15)+10),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
-    setWalkChart(center,axes);if(!crossed&&raw>=.5){setCurrentWalkCell(neighbor);crossed=true}rebuildWalkCell(false);rebuildExtremes();updateSelectedHopfFiber(hopfBaseVector);requestRender();
+    setWalkChart(center,axes);if(!crossed&&raw>=.5){setCurrentWalkCell(neighbor);crossed=true}rebuildWalkCell(false);rebuildExtremes();updateSelectedHopfFiber(hopfBaseVector);updateTorusGeometry();requestRender();
     if(visualMode==='hopf')rebuildAmbientHopf();
-    if(raw<1)requestAnimationFrame(frame);else{if(!crossed)setCurrentWalkCell(neighbor);walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}
+    if(raw<1)requestAnimationFrame(frame);else{if(!crossed)setCurrentWalkCell(neighbor);walkAnimating=false;rebuildChart();writeViewUrl('replace')}
   }
   requestAnimationFrame(frame);
 }
@@ -400,13 +400,13 @@ function writeViewUrl(action){
   if(!action)return;const url=new URL(location.href);if(walkView){url.searchParams.set('view','walk');url.searchParams.set('cell',String(currentWalkCellId()))}else{url.searchParams.delete('view');url.searchParams.delete('cell')}history[`${action}State`](null,'',url);
 }
 function setWalkView(active,urlAction='push'){
-  walkView=active;document.body.classList.toggle('walking',active);walkToggle.setAttribute('aria-pressed',String(active));walkToggle.textContent=active?'OUTSIDE VIEW':'INSIDE VIEW';walkHint.hidden=!active;groups.walk.visible=active;groups.torus.visible=!active;groups.extremes.visible=true;groups.selectedFiber.visible=true;groups.simplex.visible=!active&&visualMode==='simplex';groups.cell.visible=!active&&visualMode==='cell600';groups.cell120.visible=!active&&visualMode==='cell120';
+  walkView=active;document.body.classList.toggle('walking',active);walkToggle.setAttribute('aria-pressed',String(active));walkToggle.textContent=active?'OUTSIDE VIEW':'INSIDE VIEW';walkHint.hidden=!active;groups.walk.visible=active;groups.torus.visible=true;groups.extremes.visible=true;groups.selectedFiber.visible=true;groups.simplex.visible=!active&&visualMode==='simplex';groups.cell.visible=!active&&visualMode==='cell600';groups.cell120.visible=!active&&visualMode==='cell120';
   const label=visualMode==='hopf'?'HOPF':visualMode==='simplex'?'4-SIMPLEX':visualMode==='cell600'?'600-CELL':'120-CELL';modeLabel.textContent=`${label} · ${active?'INSIDE':'OUTSIDE'} VIEW`;
   if(active){
     const requested=Number(new URL(location.href).searchParams.get('cell'));
     if(Number.isInteger(requested)){if(visualMode==='simplex'&&requested>=0&&requested<5)walkCellSimplex=requested;else if(visualMode==='cell120'&&requested>=0&&requested<120)walkCell120=requested;else if(visualMode==='cell600'&&requested>=0&&requested<600)walkCell600=requested}
     const center=currentWalkCenter(),baseAxis=tangentFrame(center,overviewAxes);setWalkChart(center,baseAxis);
-    controls.enabled=false;camera.near=.015;camera.fov=72;camera.updateProjectionMatrix();rebuildChart(false);aimInsideAtFirstFace();
+    controls.enabled=false;camera.near=.015;camera.fov=72;camera.updateProjectionMatrix();rebuildChart();aimInsideAtFirstFace();
   }else{
     controls.enabled=true;camera.near=.05;camera.fov=38;camera.updateProjectionMatrix();projectionPole=[...overviewPole];projectionAxes=overviewAxes.map(axis=>[...axis]);projectionScale=1.05;ensureProjectedPolytope(visualMode);controls.minDistance=4;controls.maxDistance=32;camera.up.set(0,0,1);camera.position.set(7.4,8.8,13);controls.target.set(0,0,0);camera.lookAt(controls.target);controls.update();groups.walk.visible=false;groups.torus.visible=true;groups.extremes.visible=true;rebuildExtremes();rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector);updateTorusGeometry();
   }
@@ -468,7 +468,7 @@ let cellHighlightTimer=0;
 function refreshCellHighlights(){clearTimeout(cellHighlightTimer);if(!walkView&&['simplex','cell600','cell120'].includes(visualMode))ensureProjectedPolytope(visualMode);requestRender()}
 function setTorusLatitude(z){
   torusEta=.5*Math.acos(THREE.MathUtils.clamp(z,-1,1));updateHopfBaseDisplay();cancelAnimationFrame(torusSelectionFrame);
-  torusSelectionFrame=requestAnimationFrame(()=>{if(!walkView)updateTorusGeometry();requestRender()});
+  torusSelectionFrame=requestAnimationFrame(()=>{updateTorusGeometry();requestRender()});
 }
 function hopfScreenPoint(event){const rect=hopfBase.getBoundingClientRect();return new THREE.Vector2((event.clientX-rect.left)/rect.width*2.24-1.12,-((event.clientY-rect.top)/rect.height*2.24-1.12))}
 function hopfTrackball(point){const vector=new THREE.Vector3(point.x,point.y,0),r2=vector.x*vector.x+vector.y*vector.y;if(r2>1)vector.multiplyScalar(1/Math.sqrt(r2));else vector.z=Math.sqrt(1-r2);return vector}
@@ -504,7 +504,7 @@ function writeModeUrl(mode,action){
 function applyMode(mode,urlAction){
   visualMode=mode;groups.hopf.visible=mode==='hopf';groups.selectedFiber.visible=true;hopfBaseControl.hidden=false;groups.simplex.visible=!walkView&&mode==='simplex';groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
   const label=mode==='hopf'?'HOPF':mode==='simplex'?'4-SIMPLEX':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — Seeing the 3-sphere, from within`;writeModeUrl(mode,urlAction);
-  if(walkView){const center=currentWalkCenter();setWalkChart(center,tangentFrame(center,projectionAxes));rebuildChart(false);writeViewUrl('replace')}else{ensureProjectedPolytope(mode);updateTorusGeometry()}
+  if(walkView){const center=currentWalkCenter();setWalkChart(center,tangentFrame(center,projectionAxes));rebuildChart();writeViewUrl('replace')}else{ensureProjectedPolytope(mode);updateTorusGeometry()}
   requestRender();
 }
 function selectMode(mode,urlAction){const input=modeInputs.find(candidate=>candidate.value===mode);if(input)input.checked=true;applyMode(mode,urlAction)}
@@ -512,8 +512,8 @@ modeInputs.forEach(input=>input.addEventListener('change',()=>{if(input.checked)
 window.addEventListener('popstate',()=>{selectMode(modeFromUrl());setWalkView(new URL(location.href).searchParams.get('view')==='walk',null)});
 const sidebar=document.querySelector('.controls'),sidebarTrigger=document.querySelector('#sidebar-trigger');sidebarTrigger.addEventListener('click',()=>{const open=sidebar.classList.toggle('open');sidebarTrigger.setAttribute('aria-expanded',String(open));if(!open)sidebarTrigger.blur()});
 const opacity=document.querySelector('#opacity'),opacityValue=document.querySelector('#opacity-value');opacity.addEventListener('input',()=>{torusMaterial.opacity=+opacity.value/100;opacityValue.value=`${opacity.value}%`;requestRender()});
-const wallDetail=document.querySelector('#wall-detail'),wallDetailValue=document.querySelector('#wall-detail-value');let wallDetailFrame=0;
-wallDetail.addEventListener('input',()=>{wallTileDensity=+wallDetail.value;wallDetailValue.value=`${wallTileDensity}×`;cancelAnimationFrame(wallDetailFrame);wallDetailFrame=requestAnimationFrame(()=>{if(walkView)rebuildWalkCell();requestRender()})});
+const subdivisionControl=document.querySelector('#subdivision'),subdivisionValue=document.querySelector('#subdivision-value');let subdivisionFrame=0;
+subdivisionControl.addEventListener('input',()=>{subdivisionLevel=+subdivisionControl.value;subdivisionValue.value=`${subdivisionLevel}×`;cancelAnimationFrame(subdivisionFrame);subdivisionFrame=requestAnimationFrame(()=>{if(walkView)rebuildWalkCell();updateTorusGeometry();requestRender()})});
 const projectionControl=document.querySelector('#projection-point'),projectionStops=[...document.querySelectorAll('[data-projection-stop]')];let projectionFrame=0,projectionSnapFrame=0,lastPolytopeProjection=0;
 function updateOverviewProjection(forcePolytope=false){
   const amount=+projectionControl.value/100,angle=amount*Math.PI/2,c=Math.cos(angle),s=Math.sin(angle);

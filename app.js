@@ -52,10 +52,24 @@ function make600(){
 
 const poly=make600();
 function slerp(a,b,t){const d=Math.max(-1,Math.min(1,dot(a,b))),angle=Math.acos(d);if(angle<1e-7)return normalize(a.map((x,i)=>(1-t)*x+t*b[i]));const s=Math.sin(angle);return a.map((x,i)=>(Math.sin((1-t)*angle)*x+Math.sin(t*angle)*b[i])/s)}
-function sphericalSegmentPoints(vertices,pairs,steps=48){const pts=[];for(const[a,b]of pairs)for(let k=0;k<steps;k++){const pa=project(slerp(vertices[a],vertices[b],k/steps)),pb=project(slerp(vertices[a],vertices[b],(k+1)/steps));if(segmentVisible(pa,pb))pts.push(pa,pb)}return pts}
+function midpointDeviation2(p,a,b){const x=p.x-(a.x+b.x)/2,y=p.y-(a.y+b.y)/2,z=p.z-(a.z+b.z)/2;return x*x+y*y+z*z}
+function appendProjectedArc(points,a,b,pa=project(a),pb=project(b),depth=0){
+  const mid=slerp(a,b,.5),pm=project(mid),visible=[pa,pm,pb].every(projectionVisible),refine=!visible||pa.distanceToSquared(pb)>.16||visible&&midpointDeviation2(pm,pa,pb)>.00012;
+  if(refine&&depth<8){appendProjectedArc(points,a,mid,pa,pm,depth+1);appendProjectedArc(points,mid,b,pm,pb,depth+1)}else if(segmentVisible(pa,pb))points.push(pa,pb);
+}
+function sphericalSegmentPoints(vertices,pairs){const pts=[];for(const[a,b]of pairs)appendProjectedArc(pts,vertices[a],vertices[b]);return pts}
 function lineSegments(pairs,color,opacity){const geo=new THREE.BufferGeometry().setFromPoints(sphericalSegmentPoints(poly.v,pairs)),mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});return new THREE.LineSegments(geo,mat)}
-function sphericalPoint(a,b,c,wa,wb,wc){return normalize(a.map((x,i)=>wa*x+wb*b[i]+wc*c[i]))}
-function appendSphericalTriangle(positions,a,b,c,subdivisions=8){const point=(i,j)=>project(sphericalPoint(a,b,c,1-(i+j)/subdivisions,i/subdivisions,j/subdivisions));for(let i=0;i<subdivisions;i++)for(let j=0;j<subdivisions-i;j++){const p0=point(i,j),p1=point(i+1,j),p2=point(i,j+1);if(triangleVisible(p0,p1,p2))for(const p of[p0,p1,p2])positions.push(p.x,p.y,p.z);if(j<subdivisions-i-1){const p3=point(i+1,j+1);if(triangleVisible(p1,p3,p2))for(const p of[p1,p3,p2])positions.push(p.x,p.y,p.z)}}}
+function appendSphericalTriangle(positions,a,b,c,quality=4){
+  const maxDepth=Math.min(8,Math.max(4,quality+2));
+  function subdivide(qa,qb,qc,pa,pb,pc,depth){
+    const ab=slerp(qa,qb,.5),bc=slerp(qb,qc,.5),ca=slerp(qc,qa,.5),pab=project(ab),pbc=project(bc),pca=project(ca),center=normalize(qa.map((x,i)=>x+qb[i]+qc[i])),pcenter=project(center),samples=[pa,pb,pc,pab,pbc,pca,pcenter],visible=samples.every(projectionVisible);
+    let refine=!visible;
+    if(visible){const maxEdge2=Math.max(pa.distanceToSquared(pb),pb.distanceToSquared(pc),pc.distanceToSquared(pa)),curve2=Math.max(midpointDeviation2(pab,pa,pb),midpointDeviation2(pbc,pb,pc),midpointDeviation2(pca,pc,pa)),cx=pcenter.x-(pa.x+pb.x+pc.x)/3,cy=pcenter.y-(pa.y+pb.y+pc.y)/3,cz=pcenter.z-(pa.z+pb.z+pc.z)/3;refine=maxEdge2>.16||curve2>.00012||cx*cx+cy*cy+cz*cz>.00028}
+    if(refine&&depth<maxDepth){subdivide(qa,ab,ca,pa,pab,pca,depth+1);subdivide(ab,qb,bc,pab,pb,pbc,depth+1);subdivide(ca,bc,qc,pca,pbc,pc,depth+1);subdivide(ab,bc,ca,pab,pbc,pca,depth+1);return}
+    if(triangleVisible(pa,pb,pc))for(const p of[pa,pb,pc])positions.push(p.x,p.y,p.z);
+  }
+  subdivide(a,b,c,project(a),project(b),project(c),0);
+}
 function sphericalFaceGeometry(vertices,faces,subdivisions=8){const positions=[];for(const face of faces){const center=normalize([0,1,2,3].map(k=>face.reduce((sum,id)=>sum+vertices[id][k],0)));for(let i=0;i<face.length;i++)appendSphericalTriangle(positions,center,vertices[face[i]],vertices[face[(i+1)%face.length]],subdivisions)}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.computeVertexNormals();return geo}
 function orientProjectedTriangles(positions){for(let i=0;i<positions.length;i+=9){const ax=positions[i],ay=positions[i+1],az=positions[i+2],bx=positions[i+3],by=positions[i+4],bz=positions[i+5],cx=positions[i+6],cy=positions[i+7],cz=positions[i+8],ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az,nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;if(nx*(ax+bx+cx)+ny*(ay+by+cy)+nz*(az+bz+cz)<0){positions[i+3]=cx;positions[i+4]=cy;positions[i+5]=cz;positions[i+6]=bx;positions[i+7]=by;positions[i+8]=bz}}}
 function appendCheckerFacePositions(positions,vertices,faces,subdivisions=6){
@@ -219,7 +233,6 @@ const torusRulingA=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.L
 const torusRulingB=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0x6846c7,transparent:true,opacity:.8,depthWrite:false}));
 groups.torus.add(torusSurface,torusRulingA,torusRulingB);
 function setTorusSurface(positions,colors){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));torusSurface.geometry.dispose();torusSurface.geometry=geo}
-function midpointDeviation2(p,a,b){const x=p.x-(a.x+b.x)/2,y=p.y-(a.y+b.y)/2,z=p.z-(a.z+b.z)/2;return x*x+y*y+z*z}
 function centerDeviation2(p,a,b,c,d){const x=p.x-(a.x+b.x+c.x+d.x)/4,y=p.y-(a.y+b.y+c.y+d.y)/4,z=p.z-(a.z+b.z+c.z+d.z)/4;return x*x+y*y+z*z}
 function appendAdaptiveTorusPatch(pointAt,positions,colors,color,maxDepth=4){
   const sample=(s,t)=>{const [u,v]=pointAt(s,t);return project(torusPoint(u,v))};

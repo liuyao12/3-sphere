@@ -366,8 +366,8 @@ function tangentFrame(center,seeds){
   return frame;
 }
 function rebuildChart(includeTorus=true){
-  rebuildExtremes();
-  if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector)}
+  rebuildExtremes();updateSelectedHopfFiber(hopfBaseVector);
+  if(visualMode==='hopf')rebuildAmbientHopf();
   rebuildWalkCell();
   if(includeTorus)updateTorusGeometry();
 }
@@ -379,8 +379,8 @@ function enterWalkCell(neighbor){
   const startCenter=currentWalkCenter(),endCenter=walkCenterFor(visualMode,neighbor),startAxes=projectionAxes.map(axis=>[...axis]),started=performance.now();let crossed=false;walkAnimating=true;hoveredPortal=null;
   function frame(now){
     const raw=Math.min(1,(now-started)/520),t=raw*raw*(3-2*raw),center=slerp(startCenter,endCenter,t),axes=startAxes.map(axis=>rotateFromTo(axis,startCenter,center));
-    setWalkChart(center,axes);if(!crossed&&raw>=.5){setCurrentWalkCell(neighbor);crossed=true}rebuildWalkCell(false);requestRender();
-    if(visualMode==='hopf'){rebuildAmbientHopf();updateSelectedHopfFiber(hopfBaseVector)}
+    setWalkChart(center,axes);if(!crossed&&raw>=.5){setCurrentWalkCell(neighbor);crossed=true}rebuildWalkCell(false);rebuildExtremes();updateSelectedHopfFiber(hopfBaseVector);requestRender();
+    if(visualMode==='hopf')rebuildAmbientHopf();
     if(raw<1)requestAnimationFrame(frame);else{if(!crossed)setCurrentWalkCell(neighbor);walkAnimating=false;rebuildChart(false);writeViewUrl('replace')}
   }
   requestAnimationFrame(frame);
@@ -389,7 +389,7 @@ function writeViewUrl(action){
   if(!action)return;const url=new URL(location.href);if(walkView){url.searchParams.set('view','walk');url.searchParams.set('cell',String(currentWalkCellId()))}else{url.searchParams.delete('view');url.searchParams.delete('cell')}history[`${action}State`](null,'',url);
 }
 function setWalkView(active,urlAction='push'){
-  walkView=active;document.body.classList.toggle('walking',active);walkToggle.setAttribute('aria-pressed',String(active));walkToggle.textContent=active?'OUTSIDE VIEW':'INSIDE VIEW';walkHint.hidden=!active;groups.walk.visible=active;groups.torus.visible=!active;groups.extremes.visible=!active;groups.selectedFiber.visible=!active;groups.simplex.visible=!active&&visualMode==='simplex';groups.cell.visible=!active&&visualMode==='cell600';groups.cell120.visible=!active&&visualMode==='cell120';
+  walkView=active;document.body.classList.toggle('walking',active);walkToggle.setAttribute('aria-pressed',String(active));walkToggle.textContent=active?'OUTSIDE VIEW':'INSIDE VIEW';walkHint.hidden=!active;groups.walk.visible=active;groups.torus.visible=!active;groups.extremes.visible=true;groups.selectedFiber.visible=true;groups.simplex.visible=!active&&visualMode==='simplex';groups.cell.visible=!active&&visualMode==='cell600';groups.cell120.visible=!active&&visualMode==='cell120';
   const label=visualMode==='hopf'?'HOPF':visualMode==='simplex'?'4-SIMPLEX':visualMode==='cell600'?'600-CELL':'120-CELL';modeLabel.textContent=`${label} · ${active?'INSIDE':'OUTSIDE'} VIEW`;
   if(active){
     const requested=Number(new URL(location.href).searchParams.get('cell'));
@@ -450,7 +450,7 @@ function updateHopfBaseDisplay(){
 }
 function setHopfBaseVector(vector){
   hopfBaseVector.copy(vector).normalize();fiberRevision++;updateHopfBaseDisplay();cancelAnimationFrame(hopfSelectionFrame);
-  hopfSelectionFrame=requestAnimationFrame(()=>{if(!walkView)updateSelectedHopfFiber(hopfBaseVector);requestRender()});
+  hopfSelectionFrame=requestAnimationFrame(()=>{updateSelectedHopfFiber(hopfBaseVector);requestRender()});
   clearTimeout(cellHighlightTimer);cellHighlightTimer=setTimeout(refreshCellHighlights,140);
 }
 let cellHighlightTimer=0;
@@ -491,7 +491,7 @@ function writeModeUrl(mode,action){
   history[`${action}State`](null,'',url);
 }
 function applyMode(mode,urlAction){
-  visualMode=mode;groups.hopf.visible=mode==='hopf';groups.selectedFiber.visible=!walkView;hopfBaseControl.hidden=false;groups.simplex.visible=!walkView&&mode==='simplex';groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
+  visualMode=mode;groups.hopf.visible=mode==='hopf';groups.selectedFiber.visible=true;hopfBaseControl.hidden=false;groups.simplex.visible=!walkView&&mode==='simplex';groups.cell.visible=!walkView&&mode==='cell600';groups.cell120.visible=!walkView&&mode==='cell120';
   const label=mode==='hopf'?'HOPF':mode==='simplex'?'4-SIMPLEX':mode==='cell600'?'600-CELL':'120-CELL';sidebarMode.textContent=`${label} MODE`;modeLabel.textContent=`${label} · ${walkView?'INSIDE':'OUTSIDE'} VIEW`;document.title=`${label} — Seeing the 3-sphere, from within`;writeModeUrl(mode,urlAction);
   if(walkView){const center=currentWalkCenter();setWalkChart(center,tangentFrame(center,projectionAxes));rebuildChart(false);writeViewUrl('replace')}else{ensureProjectedPolytope(mode);updateTorusGeometry()}
   requestRender();
